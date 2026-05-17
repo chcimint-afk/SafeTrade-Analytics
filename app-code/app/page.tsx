@@ -47,6 +47,13 @@ import {
   Radar
 } from "lucide-react";
 
+// --- CONFIGURATION SYSTEM ---
+// Toggle between 'development' (seconds) and 'production' (minutes) modes
+const TERMINAL_ENV: "development" | "production" = "development"; 
+
+// News Halt Duration (Development: 8 seconds | Production: 15 minutes = 900 seconds)
+const NEWS_HALT_DURATION = TERMINAL_ENV === "development" ? 8 : 900; 
+
 export default function Dashboard() {
   const [profit, setProfit] = useState(20.00);
   const [pulse, setPulse] = useState(true);
@@ -283,13 +290,13 @@ export default function Dashboard() {
         const event = newsEvents[Math.floor(Math.random() * newsEvents.length)];
         setActiveNewsEvent({ title: event.title, assetType: event.type });
         setNewsHaltedAssets(event.assets);
-        setNewsCountdown(8);
+        setNewsCountdown(NEWS_HALT_DURATION);
         
-        // Auto-release after 8 seconds
+        // Auto-release after the configured news halt duration
         setTimeout(() => {
           setActiveNewsEvent(null);
           setNewsHaltedAssets([]);
-        }, 8000);
+        }, NEWS_HALT_DURATION * 1000);
       }
 
       if (Math.random() > 0.96) {
@@ -532,7 +539,9 @@ export default function Dashboard() {
                         </div>
                         <div className="px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-xl flex flex-col justify-center items-center min-w-[70px]">
                           <p className="text-[8px] text-red-400 font-black uppercase tracking-widest">Release</p>
-                          <p className="text-lg font-black text-white font-mono">{newsCountdown}s</p>
+                          <p className="text-lg font-black text-white font-mono">
+                            {Math.floor(newsCountdown / 60)}:{(newsCountdown % 60) < 10 ? '0' : ''}{newsCountdown % 60}
+                          </p>
                         </div>
                       </div>
                     )}
