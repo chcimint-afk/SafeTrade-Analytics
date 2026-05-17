@@ -73,6 +73,7 @@ export default function Dashboard() {
   const [bypassEodHalt, setBypassEodHalt] = useState(false);
   const [newsHaltedAssets, setNewsHaltedAssets] = useState<string[]>([]);
   const [activeNewsEvent, setActiveNewsEvent] = useState<{ title: string, assetType: string } | null>(null);
+  const [newsCountdown, setNewsCountdown] = useState<number>(0);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isPausedRef = useRef(false);
@@ -101,6 +102,14 @@ export default function Dashboard() {
   useEffect(() => { isEodHaltedRef.current = isEodHalted; }, [isEodHalted]);
   useEffect(() => { bypassEodHaltRef.current = bypassEodHalt; }, [bypassEodHalt]);
   useEffect(() => { newsHaltedAssetsRef.current = newsHaltedAssets; }, [newsHaltedAssets]);
+
+  useEffect(() => {
+    if (newsCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setNewsCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [newsCountdown]);
 
   useEffect(() => {
     const saved = localStorage.getItem('safetrade_state_v28');
@@ -274,6 +283,7 @@ export default function Dashboard() {
         const event = newsEvents[Math.floor(Math.random() * newsEvents.length)];
         setActiveNewsEvent({ title: event.title, assetType: event.type });
         setNewsHaltedAssets(event.assets);
+        setNewsCountdown(8);
         
         // Auto-release after 8 seconds
         setTimeout(() => {
@@ -512,11 +522,17 @@ export default function Dashboard() {
                       </div>
                     )}
                     {activeNewsEvent && (
-                      <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-4 animate-bounce relative z-50">
-                        <ShieldAlert className="text-red-500 shrink-0" size={24} />
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">🛡️ NEWS SHIELD PROTECTION ACTIVE</p>
-                          <p className="text-[9px] text-gray-400 mt-0.5">{activeNewsEvent.title}</p>
+                      <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-between animate-pulse relative z-50">
+                        <div className="flex items-center gap-4">
+                          <ShieldAlert className="text-red-500 shrink-0 animate-bounce" size={24} />
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">🛡️ NEWS SHIELD PROTECTION ACTIVE</p>
+                            <p className="text-[9px] text-gray-400 mt-0.5">{activeNewsEvent.title}</p>
+                          </div>
+                        </div>
+                        <div className="px-4 py-2 bg-red-500/20 border border-red-500/30 rounded-xl flex flex-col justify-center items-center min-w-[70px]">
+                          <p className="text-[8px] text-red-400 font-black uppercase tracking-widest">Release</p>
+                          <p className="text-lg font-black text-white font-mono">{newsCountdown}s</p>
                         </div>
                       </div>
                     )}
