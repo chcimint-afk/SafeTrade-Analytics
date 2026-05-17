@@ -71,6 +71,8 @@ export default function Dashboard() {
   const [threatLevel, setThreatLevel] = useState<"Low" | "Medium" | "High">("Low");
   const [isEodHalted, setIsEodHalted] = useState(false);
   const [bypassEodHalt, setBypassEodHalt] = useState(false);
+  const [newsHaltedAssets, setNewsHaltedAssets] = useState<string[]>([]);
+  const [activeNewsEvent, setActiveNewsEvent] = useState<{ title: string, assetType: string } | null>(null);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isPausedRef = useRef(false);
@@ -81,6 +83,7 @@ export default function Dashboard() {
   const dailyProfitRef = useRef(0);
   const isEodHaltedRef = useRef(false);
   const bypassEodHaltRef = useRef(false);
+  const newsHaltedAssetsRef = useRef<string[]>([]);
   
   const INITIAL_BALANCE = 5000;
   const DAILY_STOP_LOSS = -50; 
@@ -97,6 +100,7 @@ export default function Dashboard() {
   useEffect(() => { dailyProfitRef.current = dailyProfit; }, [dailyProfit]);
   useEffect(() => { isEodHaltedRef.current = isEodHalted; }, [isEodHalted]);
   useEffect(() => { bypassEodHaltRef.current = bypassEodHalt; }, [bypassEodHalt]);
+  useEffect(() => { newsHaltedAssetsRef.current = newsHaltedAssets; }, [newsHaltedAssets]);
 
   useEffect(() => {
     const saved = localStorage.getItem('safetrade_state_v28');
@@ -174,12 +178,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      // 1. Check for EOD halt (Belgium/European Time)
+      // 1. Check for EOD halt (Belgium/European Time: sleep from 18:00 to 09:00)
       const now = new Date();
       const currentHour = now.getHours();
-      const isPost18 = currentHour >= 18;
+      const isHaltPeriod = currentHour >= 18 || currentHour < 9;
 
-      if (isPost18 && !bypassEodHaltRef.current && !isEodHaltedRef.current) {
+      if (isHaltPeriod && !bypassEodHaltRef.current && !isEodHaltedRef.current) {
         setIsEodHalted(true);
         isEodHaltedRef.current = true;
         setIsAutotrade(false);
@@ -194,12 +198,15 @@ export default function Dashboard() {
         });
       }
 
-      // Reset EOD halt when a new trading day starts
-      if (!isPost18 && isEodHaltedRef.current) {
+      // Reset EOD halt when the safe trading day starts (at 09:00)
+      if (!isHaltPeriod && isEodHaltedRef.current) {
         setIsEodHalted(false);
         isEodHaltedRef.current = false;
         setBypassEodHalt(false);
         bypassEodHaltRef.current = false;
+        // Reset daily stats for the new day
+        setDailyProfit(0);
+        dailyProfitRef.current = 0;
       }
 
       setMarketSentiment(prev => {
@@ -228,6 +235,10 @@ export default function Dashboard() {
       }
 
       setProfit(prev => {
+        // If Bitcoin is news-halted, freeze profit and show News Shield Lock!
+        if (newsHaltedAssetsRef.current.includes("BTC")) {
+          return prev;
+        }
         const hasReachedTarget = dailyProfitRef.current >= DAILY_TARGET;
         const requiredSentiment = hasReachedTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD;
         
@@ -252,6 +263,24 @@ export default function Dashboard() {
         }
         return nextProfit;
       });
+
+      // 2. News Shield Event simulation (randomly 3% chance every tick)
+      if (Math.random() > 0.97) {
+        const newsEvents = [
+          { title: "⚠️ FED MEETING: Interest rate announcement pending. News Shield activated for BTC & SPX.", assets: ["BTC", "SPX"], type: "USD/FED" },
+          { title: "⚠️ OPEC EXTRAORDINARY SESSION: Crude supply quota adjustments. News Shield activated for GOLD & Crude Oil.", assets: ["GOLD", "WTI Crude Oil"], type: "OPEC" },
+          { title: "⚠️ TSLA EARNINGS RELEASE: Q1 Net Profits statement. News Shield activated for TSLA.", assets: ["TSLA"], type: "EARNINGS" }
+        ];
+        const event = newsEvents[Math.floor(Math.random() * newsEvents.length)];
+        setActiveNewsEvent({ title: event.title, assetType: event.type });
+        setNewsHaltedAssets(event.assets);
+        
+        // Auto-release after 8 seconds
+        setTimeout(() => {
+          setActiveNewsEvent(null);
+          setNewsHaltedAssets([]);
+        }, 8000);
+      }
 
       if (Math.random() > 0.96) {
         const assets = ["BTC", "ETH", "GOLD", "TSLA", "SPX"];
@@ -482,6 +511,15 @@ export default function Dashboard() {
                         </div>
                       </div>
                     )}
+                    {activeNewsEvent && (
+                      <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center gap-4 animate-bounce relative z-50">
+                        <ShieldAlert className="text-red-500 shrink-0" size={24} />
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">🛡️ NEWS SHIELD PROTECTION ACTIVE</p>
+                          <p className="text-[9px] text-gray-400 mt-0.5">{activeNewsEvent.title}</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <div>
                         <h2 className="text-xl font-black tracking-tighter uppercase italic text-white/10 select-none">SafeTrade Engine v9</h2>
@@ -489,6 +527,16 @@ export default function Dashboard() {
                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black tracking-[0.2em] uppercase ${marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'}`}>
                               {marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (dailyProfit >= DAILY_TARGET ? 'Profit Shield Active' : 'Safe Protocol Active') : 'Market Scanning'}
                            </span>
+                           {dailyProfit >= DAILY_TARGET && (
+                              <span className="px-2 py-0.5 rounded-full text-[8px] font-black tracking-[0.2em] uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                                🔒 Greed Lock Active
+                              </span>
+                           )}
+                           {newsHaltedAssets.includes("BTC") && (
+                              <span className="px-2 py-0.5 rounded-full text-[8px] font-black tracking-[0.2em] uppercase bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse">
+                                🛡️ News Shield Halted
+                              </span>
+                           )}
                         </div>
                       </div>
                       <div className="flex gap-8">
@@ -526,8 +574,11 @@ export default function Dashboard() {
                             <div className="text-center space-y-1 relative z-10">
                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-600 italic">Security Status</p>
                                <p className={`text-lg font-black tracking-tight ${marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'text-blue-400' : 'text-white/40'}`}>
-                                  {marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'READY' : 'SCANNING'}
+                                  {marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (dailyProfit >= DAILY_TARGET ? 'GREED SHIELD READY' : 'READY') : 'SCANNING'}
                                </p>
+                               {dailyProfit >= DAILY_TARGET && (
+                                  <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest mt-1">Target Met: 80% Threshold Reqd</p>
+                               )}
                             </div>
                             <div className="relative z-10 mt-2 scale-75">
                                {marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (
@@ -602,10 +653,10 @@ export default function Dashboard() {
                     <h2 className="text-lg font-black uppercase tracking-[0.3em] text-white/90 italic">Macro Intelligence</h2>
                  </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <BigIntelligenceCard label="Gold (XAU/USD)" value="2,345" change="+1.2%" sentiment={88} icon={<Gem size={32} className="text-yellow-500" />} />
-                    <BigIntelligenceCard label="Tesla (TSLA)" value="175.20" change="+2.1%" sentiment={72} icon={<Zap size={32} className="text-red-500" />} />
-                    <BigIntelligenceCard label="S&P 500 Index" value="5,120" change="+0.4%" sentiment={65} icon={<BarChart3 size={32} className="text-blue-400" />} />
-                    <BigIntelligenceCard label="Crude Oil WTI" value="82.45" change="-1.2%" sentiment={35} icon={<Flame size={32} className="text-orange-500" />} />
+                    <BigIntelligenceCard label="Gold (XAU/USD)" value="2,345" change="+1.2%" sentiment={88} icon={<Gem size={32} className="text-yellow-500" />} isNewsHalted={newsHaltedAssets.includes("GOLD")} />
+                    <BigIntelligenceCard label="Tesla (TSLA)" value="175.20" change="+2.1%" sentiment={72} icon={<Zap size={32} className="text-red-500" />} isNewsHalted={newsHaltedAssets.includes("TSLA")} />
+                    <BigIntelligenceCard label="S&P 500 Index" value="5,120" change="+0.4%" sentiment={65} icon={<BarChart3 size={32} className="text-blue-400" />} isNewsHalted={newsHaltedAssets.includes("SPX")} />
+                    <BigIntelligenceCard label="Crude Oil WTI" value="82.45" change="-1.2%" sentiment={35} icon={<Flame size={32} className="text-orange-500" />} isNewsHalted={newsHaltedAssets.includes("WTI Crude Oil")} />
                  </div>
               </section>
             </>
@@ -636,10 +687,15 @@ function WhaleBox({ asset, amount, status, color, icon }: { asset: string, amoun
   );
 }
 
-function BigIntelligenceCard({ label, value, change, sentiment, icon }: { label: string, value: string, change: string, sentiment: number, icon: React.ReactNode }) {
+function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalted }: { label: string, value: string, change: string, sentiment: number, icon: React.ReactNode, isNewsHalted?: boolean }) {
   const isPositive = change.startsWith('+');
   return (
-    <div className="p-6 rounded-[2rem] bg-[#0d0d0f] border border-white/5 space-y-4 hover:border-emerald-500/20 transition-all shadow-xl group">
+    <div className={`p-6 rounded-[2rem] bg-[#0d0d0f] border space-y-4 hover:border-emerald-500/20 transition-all shadow-xl group relative overflow-hidden ${isNewsHalted ? 'border-red-500/30 bg-red-950/5 shadow-[0_0_30px_rgba(239,68,68,0.02)]' : 'border-white/5'}`}>
+      {isNewsHalted && (
+        <div className="absolute top-0 right-0 bg-red-600 text-white text-[8px] font-black tracking-widest px-3 py-1 rounded-bl-xl uppercase animate-pulse z-10">
+          News Halt
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">{label}</span>
         <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>

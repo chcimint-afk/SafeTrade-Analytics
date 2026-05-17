@@ -54,10 +54,14 @@ Chaque transaction initiée par l'utilisateur passe obligatoirement par le **fil
 *   **Calculateur de Risque automatique :**
     *   *Formule* : `Taille de Position (Lot) = (Balance * 0.01) / Distance Stop-Loss (pips)`.
     *   Ce flux garantit que l'utilisateur ne perd jamais plus de 1% (50€ pour un compte de 5000€) par transaction.
-*   **Profit Shield Logic :**
-    *   Dès que le solde journalier atteint la cible (+50 EUR), le flux d'ordre se bloque automatiquement et active le "Shield" pour protéger les gains de la journée et éviter l'overtrading.
+*   **Profit Shield & Greed Lock (Щит прибыли и Замок от жадности) :**
+    *   Dès que le solde journalier atteint la cible (+50 EUR), la fonction **Greed Lock** est activée. Le seuil de confiance de l'algorithme passe automatiquement de **75% à 80%** (seuls les signaux "Premium" de flux de baleine sont autorisés). Si la confiance du marché est inférieure à 80%, toute transaction est bloquée pour éliminer la cupidité émotionnelle.
 *   **Anti-Algo Shield (Стелс-режим) :**
     *   Les Stop-Loss et Take-Profit ne sont pas envoyés sur le carnet d'ordres public. Le flux de données les garde en mémoire locale ("Phantom Orders") pour éviter la chasse aux stops par les robots institutionnels (Stop Hunting).
+*   **EOD Sleep & Auto-Wake Loop (Цикл автоматического сна и пробуждения 18:00 - 09:00 CET) :**
+    *   Le système de gestion du temps analyse en permanence l'heure de l'appareil (Heure de Belgique). À **18:00**, il coupe l'autopilote et ferme instantanément les transactions ouvertes pour sécuriser les gains. À **09:00**, le système s'éveille automatiquement, réactive l'autopilote et réinitialise les statistiques de gains journaliers.
+*   **News Shield Asset Isolation (Сегментированная защита от новостей) :**
+    *   Le flux de données filtre les événements macroéconomiques par secteur. Par exemple, les annonces de la FED (FOMC/CPI) suspendent automatiquement le trading sur **BTC et SPX**, les réunions de l'OPEC suspendent le trading sur la **Нефть (WTI Crude Oil)**, tandis que les résultats financiers suspendent le trading sur **TSLA**.
 
 ---
 
