@@ -118,6 +118,22 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, [newsCountdown]);
 
+  const checkCircuitBreaker = useCallback(() => {
+    fetch('/api/trading/circuit-breaker')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          if (data.circuit_breaker_active) {
+            setAutoHalted(true);
+            setIsPaused(true);
+            setIsAutotrade(false);
+            setProfit(0);
+          }
+        }
+      })
+      .catch(err => console.error("Error checking circuit breaker:", err));
+  }, []);
+
   useEffect(() => {
     const saved = localStorage.getItem('safetrade_state_v28');
     if (saved) {
@@ -134,7 +150,10 @@ export default function Dashboard() {
     const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3");
     audio.load();
     audioRef.current = audio;
-  }, []);
+
+    // Trigger initial circuit breaker database check on mount
+    checkCircuitBreaker();
+  }, [checkCircuitBreaker]);
 
   useEffect(() => {
     const data = { realizedProfit, dailyProfit, totalCommissions, totalSlippage, closedTradesCount, tradeHistory, greenDaysStreak };
@@ -179,6 +198,7 @@ export default function Dashboard() {
     setEfficiency(prev => Math.max(0, Math.min(100, prev - (amount < 0 ? 5 : 0) + (amount > 0 ? 1 : 0))));
     setShowFlash(true);
     setTimeout(() => setShowFlash(false), 500);
+    
     setTradeHistory(prev => [
       { 
         id: Math.random(), 
@@ -190,10 +210,48 @@ export default function Dashboard() {
       },
       ...prev.slice(0, 10)
     ]);
-  }, [playCashSound, isStealth]);
+
+    // Secure server-side DB recording (Supabase) via Next.js API route
+    fetch('/api/trading/record-trade', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        asset: newsHaltedAssetsRef.current.includes("BTC") ? "SPX" : "BTC",
+        direction: netAmount >= 0 ? "BUY" : "SELL",
+        entry_price: 68500.00,
+        exit_price: 68500.00 + netAmount,
+        stop_loss: 68500.00 - 50.00,
+        take_profit: 68500.00 + 75.00,
+        profit_loss: netAmount,
+        slippage: commission + slippage
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      console.log("DB Trade logged:", data);
+      checkCircuitBreaker();
+    })
+    .catch(err => console.error("DB logging failed:", err));
+
+  }, [playCashSound, isStealth, checkCircuitBreaker]);
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Periodically check server-side circuit breaker status from DB
+      fetch('/api/trading/circuit-breaker')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.circuit_breaker_active && !autoHaltedRef.current) {
+            setAutoHalted(true);
+            setIsPaused(true);
+            setIsAutotrade(false);
+            setProfit(0);
+          }
+        })
+        .catch(err => console.error("Polled circuit breaker check failed:", err));
+
       // 1. Check for EOD halt (Belgium/European Time: sleep from 18:00 to 09:00)
       const now = new Date();
       const currentHour = now.getHours();

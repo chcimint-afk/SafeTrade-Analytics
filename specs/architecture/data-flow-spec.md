@@ -1,7 +1,7 @@
-# 📊 Spécification des Flux de Données : SafeTrade Analytics
+# 📊 Spécification des Flux de Données : SafeTrade Analytics v9
 ## (Data Flow Specification / Спецификация Потоков Данных)
 
-Ce document définit la structure et le flux des données au sein de la plateforme **SafeTrade Analytics**. Il décrit comment les données du marché sont capturées, traitées par nos algorithmes de sécurité et affichées en temps réel sur l'interface utilisateur.
+Ce document définit la structure et le flux des données au sein de la plateforme **SafeTrade Analytics v9**. Il décrit comment les données du marché sont capturées, traitées par nos algorithmes de sécurité sur le serveur et stockées de manière sécurisée dans la base de données cloud Supabase (Paris).
 
 ---
 
@@ -11,11 +11,11 @@ Le système utilise un flux de données unidirectionnel réactif pour garantir d
 
 ```mermaid
 graph TD
-    A[Mock Live Feed / APIs Forex & Crypto] -->|1. Données Brutes en Temps Réel| B(Trading State Context / Custom Hooks)
-    B -->|2. Calcul des Indicateurs EMA/RSI| C{Calculateur de Risque & Anti-Algo Shield}
-    C -->|3. Validation Strict < 1% Risque| D[Exécution Fictive / Stealth Mode]
-    D -->|4. Sauvegarde Locale / LocalStorage| E[(Persistance des Données)]
-    D -->|5. Rendu Visuel Réactif| F[Dashboard UI / Mobile Terminal]
+    A[Live Feed / APIs Forex & Crypto] -->|1. Données Brutes en Temps Réel| B(Trading State Context / Custom Hooks)
+    B -->|2. Calcul des Indicateurs EMA/RSI| C{Next.js Server API Routes}
+    C -->|3. Route: api/trading/record-trade| D[(Supabase Cloud DB - Paris)]
+    C -->|4. Route: api/trading/circuit-breaker| D
+    D -->|5. Validation & RLS Check| E[Dashboard UI / Mobile Terminal]
 ```
 
 ### Разделы потока данных (En français & En russe) :
@@ -25,58 +25,50 @@ graph TD
     *   Ces données brutes simulent parfaitement les conditions réelles du marché pour le backtesting.
 2.  **State Management (Управление состоянием в React) :**
     *   **`TradingContext`** : Le cœur de l'application Next.js. Il maintient l'état global (Solde, Positions Ouvertes, Historique, Objectif du Jour).
-    *   **Custom Hooks (`useTradingState`)** : Mettent à jour l'interface utilisateur toutes les 500ms sans ralentir le navigateur sur appareil mobile.
+    *   **Custom Hooks (`useTradingState`)** : Mettent à jour l'interface utilisateur toutes les 500ms без снижения производительности.
+3.  **Serverless Database Layer (Серверный слой СУБД в облаке) :**
+    *   **Supabase PostgreSQL (Paris - `eu-west-3`)** : Узел хранения учетных записей, балансов и истории сделок. Защищен встроенными политиками RLS (Row Level Security).
 
 ---
 
 ## 🛡️ 2. Boucle de Sécurité en Temps Réel (Safety & Risk Loop)
 
-Chaque transaction initiée par l'utilisateur passe obligatoirement par le **filtre de sécurité Absolute Safety Protocol** avant d'être enregistrée.
+Каждая транзакция, инициированная пользователем на фронтенде, отправляется через защищенный API-шлюз на сервер.
 
 ```
-[Ordre Utilisateur] 
+[Интерфейс Dashboard] 
+       │
+       ▼ (POST-запрос)
+[API: record-trade / circuit-breaker] ──► Проверка лимита 1% ? ──► [Блокировка API / Лог в system_logs]
+       │ (Риск в норме)
+       ▼
+[Supabase DB / trades table] ──► Запись транзакции
        │
        ▼
-[Vérification du Risque] ──► Risque > 1% ? ──► [REJETÉ / Ajustement Lot automatique]
-       │ (Risque OK < 1%)
-       ▼
-[Anti-Algo Shield Activated] ──► Masquage des Stop-Loss (Ordres Fantômes)
-       │
-       ▼
-[Exécution Fictive] ──► Enregistrement Local (LocalStorage)
-       │
-       ▼
-[Calcul Profit Shield] ──► Objectif 50€ atteint ? ──► [Verrouillage / Stop trading]
+[Обновление баланса / users table] ──► Корректировка счета в реальном времени
 ```
 
-### Algorithmes de Protection (Пояснение алгоритмов) :
+### Algorithmes de Protection (Пояснение параметров и алгоритмов) :
 
-*   **Calculateur de Risque automatique :**
-    *   *Formule* : `Taille de Position (Lot) = (Balance * 0.01) / Distance Stop-Loss (pips)`.
-    *   Ce flux garantit que l'utilisateur ne perd jamais plus de 1% (50€ pour un compte de 5000€) par transaction.
+*   **Calculateur de Risque automatique (Автоматический расчет риска) :**
+    *   *Формула риска* : `Lot = (Account Balance * 0.01) / Distance Stop-Loss`.
+    *   Фронтенд автоматически рассчитывает размер лота так, чтобы максимально допустимый убыток в одной сделке составлял ровно **1%** от стартового депозита (т.е. **-50.00 EUR** от стартовых **5000.00 EUR**).
 *   **Profit Shield & Greed Lock (Щит прибыли и Замок от жадности) :**
-    *   Dès que le solde journalier atteint la cible (+50 EUR), la fonction **Greed Lock** est activée. Le seuil de confiance de l'algorithme passe automatiquement de **75% à 80%** (seuls les signaux "Premium" de flux de baleine sont autorisés). Si la confiance du marché est inférieure à 80%, toute transaction est bloquée pour éliminer la cupidité émotionnelle.
-*   **Anti-Algo Shield (Стелс-режим) :**
-    *   Les Stop-Loss et Take-Profit ne sont pas envoyés sur le carnet d'ordres public. Le flux de données les garde en mémoire locale ("Phantom Orders") pour éviter la chasse aux stops par les robots institutionnels (Stop Hunting).
-*   **EOD Sleep & Auto-Wake Loop (Цикл автоматического сна и пробуждения 18:00 - 09:00 CET) :**
-    *   Le système de gestion du temps analyse en permanence l'heure de l'appareil (Heure de Belgique). À **18:00**, il coupe l'autopilote et ferme instantanément les transactions ouvertes pour sécuriser les gains. À **09:00**, le système s'éveille automatiquement, réactive l'autopilote et réinitialise les statistiques de gains journaliers.
-*   **News Shield Asset Isolation (Сегментированная защита от новостей) :**
-    *   Le flux de données filtre les événements macroéconomiques par secteur. Par exemple, les annonces de la FED (FOMC/CPI) suspendent automatiquement le trading sur **BTC et SPX**, les réunions de l'OPEC suspendent le trading sur la **Нефть (WTI Crude Oil)**, tandis que les résultats financiers suspendent le trading sur **TSLA**.
+    *   **`DAILY_TARGET` (Дневная цель)** = **+50.00 EUR** (1% от баланса).
+    *   **`BASE_SENTIMENT_THRESHOLD` (Базовый сентимент)** = **75%** (минимальный порог уверенности для открытия сделок в обычном режиме).
+    *   **`PROFIT_SHIELD_THRESHOLD` (Порог Greed Lock)** = **80%** (порог уверенности для сделок после достижения дневной цели).
+    *   *Механика*: Как только дневной профит превышает +50 EUR, система активирует **Greed Lock**. Торговый тумблер перекрывает сделки при сентименте ниже 80%, пропуская только «китовые сигналы».
+*   **EOD Sleep & Auto-Wake Loop (Авто-сон EOD с 18:00 до 09:00 CET) :**
+    *   При наступлении 18:00 по европейскому времени (`isHaltPeriod = true`), система блокирует сессию, автоматически закрывает плавающие позиции и фиксирует текущую дневную прибыль. Сброс блокировки и обнуление статистики происходит в 09:00 CET.
+*   **News Shield (Новостной щит) :**
+    *   Приостанавливает торги по новостному активу за 15-30 минут до выхода новости и разблокирует через 15-30 минут после окончания импульсной волатильности (проверяется датчиком ATR).
 
 ---
 
-## 💾 3. Persistance et Performance sur Mobile (Mobile Optimization)
+## 💾 3. Persistance et RLS Security (Безопасность облака)
 
-Pour assurer une fluidité maximale sur smartphone (car l'application est conçue pour un usage personnel sur mobile) :
-1.  **LocalStorage Engine :** Toutes les données utilisateur (Balance, historique des trades, état du bouclier) sont persistées localement dans le navigateur. Aucune base de données externe lente n'est requise, ce qui élimine les temps de chargement.
-2.  **Debounced Render :** Les graphiques se mettent à jour avec un effet de lissage (smooth interpolation) pour économiser la batterie du téléphone tout en conservant un rendu Bloomberg-level ultra-premium.
-
----
-
-## 🧸 4. Synthèse Simple (Pour le Dossier / Résumé)
-
-*   **Pourquoi ce flux ?** Pour s'assurer que le code calcule le risque **avant** de valider le trade, et non après. C'est ce qui rend SafeTrade impossible à liquider.
-*   **Est-ce commercial ?** Non, c'est un flux purement local et privé. Il protège les données de l'utilisateur sur son propre appareil sans les envoyer sur un serveur tiers.
+1.  **Row Level Security (RLS)** : Доступ к таблицам `users` и `trades` жестко разграничен на уровне PostgreSQL (`auth.uid() = id`). Любой несанкционированный SQL-запрос отсекается на стороне СУБД.
+2.  **Server-Side Decoupling (Серверное разделение)** : Финансовые вычисления (Stop Loss, Circuit Breaker) происходят на сервере, что исключает возможность манипуляции данными на стороне клиента (браузера).
 
 ---
-*Ce document sert de spécification de flux pour le projet SafeTrade Analytics. Validé pour l'évaluation académique.*
+*Ce document sert de spécification de flux pour le projet SafeTrade Analytics v9. Validé pour l'évaluation académique.*
