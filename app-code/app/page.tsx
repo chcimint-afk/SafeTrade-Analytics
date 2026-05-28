@@ -82,6 +82,31 @@ export default function Dashboard() {
   const [activeNewsEvent, setActiveNewsEvent] = useState<{ title: string, assetType: string } | null>(null);
   const [newsCountdown, setNewsCountdown] = useState<number>(0);
   
+  // Real-time Macro Assets States for absolute alive feel
+  const [goldPrice, setGoldPrice] = useState(2345.50);
+  const [goldChange, setGoldChange] = useState(1.2);
+  const [goldSentiment, setGoldSentiment] = useState(88);
+
+  const [tslaPrice, setTslaPrice] = useState(175.20);
+  const [tslaChange, setTslaChange] = useState(2.1);
+  const [tslaSentiment, setTslaSentiment] = useState(72);
+
+  const [spxPrice, setSpxPrice] = useState(5120.25);
+  const [spxChange, setSpxChange] = useState(0.4);
+  const [spxSentiment, setSpxSentiment] = useState(65);
+
+  const [oilPrice, setOilPrice] = useState(82.45);
+  const [oilChange, setOilChange] = useState(-1.2);
+  const [oilSentiment, setOilSentiment] = useState(35);
+
+  const [eurusdPrice, setEurusdPrice] = useState(1.0850);
+  const [eurusdChange, setEurusdChange] = useState(0.15);
+  const [eurusdSentiment, setEurusdSentiment] = useState(55);
+
+  const [ndxPrice, setNdxPrice] = useState(18245.80);
+  const [ndxChange, setNdxChange] = useState(0.85);
+  const [ndxSentiment, setNdxSentiment] = useState(78);
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isPausedRef = useRef(false);
   const isPanicRef = useRef(false);
@@ -338,12 +363,57 @@ export default function Dashboard() {
         return nextProfit;
       });
 
+      // Live Fluctuations for Macro Assets to give terminal "breathing" state
+      setGoldPrice(prev => {
+        const delta = (Math.random() - 0.5) * 1.5;
+        return Number(Math.max(2200, Math.min(2500, prev + delta)).toFixed(2));
+      });
+      setGoldChange(prev => Number((prev + (Math.random() - 0.5) * 0.05).toFixed(2)));
+      setGoldSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 3))));
+
+      setTslaPrice(prev => {
+        const delta = (Math.random() - 0.5) * 0.4;
+        return Number(Math.max(150, Math.min(200, prev + delta)).toFixed(2));
+      });
+      setTslaChange(prev => Number((prev + (Math.random() - 0.5) * 0.08).toFixed(2)));
+      setTslaSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 4))));
+
+      setSpxPrice(prev => {
+        const delta = (Math.random() - 0.5) * 2.0;
+        return Number(Math.max(5000, Math.min(5300, prev + delta)).toFixed(2));
+      });
+      setSpxChange(prev => Number((prev + (Math.random() - 0.5) * 0.02).toFixed(2)));
+      setSpxSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 2))));
+
+      setOilPrice(prev => {
+        const delta = (Math.random() - 0.5) * 0.15;
+        return Number(Math.max(78, Math.min(88, prev + delta)).toFixed(2));
+      });
+      setOilChange(prev => Number((prev + (Math.random() - 0.5) * 0.06).toFixed(2)));
+      setOilSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 3))));
+
+      setEurusdPrice(prev => {
+        const delta = (Math.random() - 0.5) * 0.0004;
+        return Number(Math.max(1.0500, Math.min(1.1200, prev + delta)).toFixed(4));
+      });
+      setEurusdChange(prev => Number((prev + (Math.random() - 0.5) * 0.01).toFixed(2)));
+      setEurusdSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 2))));
+
+      setNdxPrice(prev => {
+        const delta = (Math.random() - 0.5) * 8.0;
+        return Number(Math.max(17800, Math.min(18600, prev + delta)).toFixed(2));
+      });
+      setNdxChange(prev => Number((prev + (Math.random() - 0.5) * 0.04).toFixed(2)));
+      setNdxSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 3))));
+
       // 2. News Shield Event simulation (randomly 3% chance every tick)
       if (Math.random() > 0.97) {
         const newsEvents = [
           { title: "⚠️ FED MEETING: Interest rate announcement pending. News Shield activated for BTC & SPX.", assets: ["BTC", "SPX"], type: "USD/FED" },
           { title: "⚠️ OPEC EXTRAORDINARY SESSION: Crude supply quota adjustments. News Shield activated for GOLD & Crude Oil.", assets: ["GOLD", "WTI Crude Oil"], type: "OPEC" },
-          { title: "⚠️ TSLA EARNINGS RELEASE: Q1 Net Profits statement. News Shield activated for TSLA.", assets: ["TSLA"], type: "EARNINGS" }
+          { title: "⚠️ TSLA EARNINGS RELEASE: Q1 Net Profits statement. News Shield activated for TSLA.", assets: ["TSLA"], type: "EARNINGS" },
+          { title: "⚠️ ECB INTEREST RATE DECISION: European Central Bank policy shift. News Shield activated for EURUSD.", assets: ["EURUSD"], type: "EUR/ECB" },
+          { title: "⚠️ TECH SECTOR VOLATILITY: Large scale options activity. News Shield activated for NDX.", assets: ["NDX"], type: "NDX/TECH" }
         ];
         const event = newsEvents[Math.floor(Math.random() * newsEvents.length)];
         setActiveNewsEvent({ title: event.title, assetType: event.type });
@@ -358,7 +428,7 @@ export default function Dashboard() {
       }
 
       if (Math.random() > 0.96) {
-        const assets = ["BTC", "ETH", "GOLD", "TSLA", "SPX"];
+        const assets = ["BTC", "ETH", "GOLD", "TSLA", "SPX", "EURUSD", "NDX"];
         const asset = assets[Math.floor(Math.random() * assets.length)];
         setWhaleAlert({ asset, amount: `$${(Math.random() * 50 + 10).toFixed(1)}M` });
         setTimeout(() => setWhaleAlert(null), 4000);
@@ -735,11 +805,55 @@ export default function Dashboard() {
                     <BarChart4 className="text-blue-400" size={20} />
                     <h2 className="text-lg font-black uppercase tracking-[0.3em] text-white/90 italic">Macro Intelligence</h2>
                  </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <BigIntelligenceCard label="Gold (XAU/USD)" value="2,345" change="+1.2%" sentiment={88} icon={<Gem size={32} className="text-yellow-500" />} isNewsHalted={newsHaltedAssets.includes("GOLD")} />
-                    <BigIntelligenceCard label="Tesla (TSLA)" value="175.20" change="+2.1%" sentiment={72} icon={<Zap size={32} className="text-red-500" />} isNewsHalted={newsHaltedAssets.includes("TSLA")} />
-                    <BigIntelligenceCard label="S&P 500 Index" value="5,120" change="+0.4%" sentiment={65} icon={<BarChart3 size={32} className="text-blue-400" />} isNewsHalted={newsHaltedAssets.includes("SPX")} />
-                    <BigIntelligenceCard label="Crude Oil WTI" value="82.45" change="-1.2%" sentiment={35} icon={<Flame size={32} className="text-orange-500" />} isNewsHalted={newsHaltedAssets.includes("WTI Crude Oil")} />
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+                    <BigIntelligenceCard 
+                      label="Gold (XAU/USD)" 
+                      value={goldPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                      change={(goldChange >= 0 ? '+' : '') + goldChange.toFixed(2) + '%'} 
+                      sentiment={goldSentiment} 
+                      icon={<Gem size={32} className="text-yellow-500" />} 
+                      isNewsHalted={newsHaltedAssets.includes("GOLD")} 
+                    />
+                    <BigIntelligenceCard 
+                      label="Tesla (TSLA)" 
+                      value={tslaPrice.toFixed(2)} 
+                      change={(tslaChange >= 0 ? '+' : '') + tslaChange.toFixed(2) + '%'} 
+                      sentiment={tslaSentiment} 
+                      icon={<Zap size={32} className="text-red-500" />} 
+                      isNewsHalted={newsHaltedAssets.includes("TSLA")} 
+                    />
+                    <BigIntelligenceCard 
+                      label="S&P 500 Index" 
+                      value={spxPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
+                      change={(spxChange >= 0 ? '+' : '') + spxChange.toFixed(2) + '%'} 
+                      sentiment={spxSentiment} 
+                      icon={<BarChart3 size={32} className="text-blue-400" />} 
+                      isNewsHalted={newsHaltedAssets.includes("SPX")} 
+                    />
+                    <BigIntelligenceCard 
+                      label="Crude Oil WTI" 
+                      value={oilPrice.toFixed(2)} 
+                      change={(oilChange >= 0 ? '+' : '') + oilChange.toFixed(2) + '%'} 
+                      sentiment={oilSentiment} 
+                      icon={<Flame size={32} className="text-orange-500" />} 
+                      isNewsHalted={newsHaltedAssets.includes("WTI Crude Oil")} 
+                    />
+                    <BigIntelligenceCard 
+                      label="Euro / US Dollar" 
+                      value={eurusdPrice.toFixed(4)} 
+                      change={(eurusdChange >= 0 ? '+' : '') + eurusdChange.toFixed(2) + '%'} 
+                      sentiment={eurusdSentiment} 
+                      icon={<Coins size={32} className="text-emerald-500" />} 
+                      isNewsHalted={newsHaltedAssets.includes("EURUSD")} 
+                    />
+                    <BigIntelligenceCard 
+                      label="NASDAQ-100 Tech" 
+                      value={ndxPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
+                      change={(ndxChange >= 0 ? '+' : '') + ndxChange.toFixed(2) + '%'} 
+                      sentiment={ndxSentiment} 
+                      icon={<Cpu size={32} className="text-blue-500" />} 
+                      isNewsHalted={newsHaltedAssets.includes("NDX")} 
+                    />
                  </div>
               </section>
             </>
