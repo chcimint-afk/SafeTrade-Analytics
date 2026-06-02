@@ -1,16 +1,7 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/utils/supabase/server';
 
 export default async function RootPage() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect('/admin');
-  } else {
-    redirect('/admin/login');
-  }
+  // Directly redirect to the secure login gateway page.
+  // The middleware will handle session checks and redirect logged-in users back to /admin.
+  redirect('/admin/login');
 }
