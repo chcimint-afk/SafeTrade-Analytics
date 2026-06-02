@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     // 1. Get the default user (self-healing pattern)
-    let { data: users, error: userError } = await supabase
+    const { data: users, error: userError } = await supabase
       .from("users")
       .select("id, daily_loss_limit, starting_balance")
       .limit(1);
@@ -98,8 +98,9 @@ export async function GET(req: NextRequest) {
       circuit_breaker_active: isTriggered,
       timestamp: new Date().toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in circuit-breaker API route:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

@@ -40,8 +40,9 @@ export default function AdminLogin() {
         router.push("/admin");
         router.refresh();
       }
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred.");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred.";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

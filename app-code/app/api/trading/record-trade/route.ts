@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Self-healing database pattern: Ensure a default user exists to prevent foreign key issues
-    let { data: users, error: userError } = await supabase
+    const { data: users, error: userError } = await supabase
       .from("users")
       .select("id, current_balance")
       .limit(1);
@@ -97,10 +97,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       trade,
-      updated_balance: updatedBalance,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in record-trade API route:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

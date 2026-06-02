@@ -45,7 +45,6 @@ import {
   TrendingUpIcon,
   Award,
   CircleDollarSign,
-  Radio,
   Radar
 } from "lucide-react";
 
@@ -55,6 +54,12 @@ const TERMINAL_ENV: "development" | "production" = "development";
 
 // News Halt Duration (Development: 8 seconds | Production: 15 minutes = 900 seconds)
 const NEWS_HALT_DURATION = TERMINAL_ENV === "development" ? 8 : 900; 
+
+const INITIAL_BALANCE = 5000;
+const DAILY_STOP_LOSS = -50; 
+const DAILY_TARGET = 50.00; 
+const BASE_SENTIMENT_THRESHOLD = 75; 
+const PROFIT_SHIELD_THRESHOLD = 80;
 
 export default function Dashboard() {
   const router = useRouter();
@@ -128,12 +133,6 @@ export default function Dashboard() {
   const bypassEodHaltRef = useRef(false);
   const newsHaltedAssetsRef = useRef<string[]>([]);
   
-  const INITIAL_BALANCE = 5000;
-  const DAILY_STOP_LOSS = -50; 
-  const DAILY_TARGET = 50.00; 
-  const BASE_SENTIMENT_THRESHOLD = 75; 
-  const PROFIT_SHIELD_THRESHOLD = 80;
-
   // Sync refs with state
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
   useEffect(() => { isPanicRef.current = isPanic; }, [isPanic]);
@@ -173,12 +172,19 @@ export default function Dashboard() {
     const saved = localStorage.getItem('safetrade_state_v28');
     if (saved) {
       const data = JSON.parse(saved);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRealizedProfit(data.realizedProfit || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDailyProfit(data.dailyProfit || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTotalCommissions(data.totalCommissions || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTotalSlippage(data.totalSlippage || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClosedTradesCount(data.closedTradesCount || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTradeHistory(data.tradeHistory || []);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGreenDaysStreak(data.greenDaysStreak || 0);
     }
     // Pre-load audio
