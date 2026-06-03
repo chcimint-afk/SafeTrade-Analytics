@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
@@ -8,24 +8,41 @@ import {
   TrendingUp, 
   ShieldCheck, 
   Activity,
+  ArrowUpRight,
+  Wallet,
+  Bell,
   Zap,
   Flame,
+  Calendar,
   Waves,
+  Briefcase,
   Lock,
+  PieChart,
+  Settings,
   ShieldAlert,
   Coins,
   Gem,
   Globe,
   BarChart3,
+  Percent,
   AlertCircle,
+  ZapOff,
+  Rocket,
   Ghost,
+  EyeOff,
+  Target,
   Trophy,
   BarChart4,
+  CheckCircle2,
   LockIcon,
   ShieldEllipsis,
   Cpu,
+  Search,
   Database,
+  Fingerprint,
+  TrendingDown,
   History,
+  TrendingUpIcon,
   Award,
   CircleDollarSign,
   Radar
@@ -54,7 +71,7 @@ export default function Dashboard() {
   };
 
   const [profit, setProfit] = useState(20.00);
-  const [, forceUpdate] = useState(true);
+  const [pulse, setPulse] = useState(true);
   const [realizedProfit, setRealizedProfit] = useState(0.00);
   const [dailyProfit, setDailyProfit] = useState(0.00);
   const [totalCommissions, setTotalCommissions] = useState(0.00);
@@ -157,11 +174,17 @@ export default function Dashboard() {
       const data = JSON.parse(saved);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRealizedProfit(data.realizedProfit || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDailyProfit(data.dailyProfit || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTotalCommissions(data.totalCommissions || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTotalSlippage(data.totalSlippage || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClosedTradesCount(data.closedTradesCount || 0);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTradeHistory(data.tradeHistory || []);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGreenDaysStreak(data.greenDaysStreak || 0);
     }
     // Pre-load audio
@@ -322,7 +345,7 @@ export default function Dashboard() {
       });
 
       if (isPausedRef.current || isPanicRef.current || autoHaltedRef.current || (isEodHaltedRef.current && !bypassEodHaltRef.current)) {
-        forceUpdate(p => !p);
+        setPulse(p => !p);
         return;
       }
 
@@ -426,7 +449,7 @@ export default function Dashboard() {
         setWhaleAlert({ asset, amount: `$${(Math.random() * 50 + 10).toFixed(1)}M` });
         setTimeout(() => setWhaleAlert(null), 4000);
       }
-      forceUpdate(p => !p);
+      setPulse(p => !p);
     }, 2000); 
     return () => clearInterval(interval);
   }, [realizeProfitAction]);
@@ -1053,7 +1076,6 @@ function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalt
   );
 }
 
-/*
 function ReportCard({ label, value, sub, icon }: { label: string, value: string, sub: string, icon: React.ReactNode }) {
   return (
     <div className="p-8 rounded-[2.5rem] bg-[#0d0d0f] border border-white/5 shadow-xl space-y-4">
@@ -1066,7 +1088,6 @@ function ReportCard({ label, value, sub, icon }: { label: string, value: string,
     </div>
   );
 }
-*/
 
 function SummaryLine({ label, value }: { label: string, value: string }) {
   return (

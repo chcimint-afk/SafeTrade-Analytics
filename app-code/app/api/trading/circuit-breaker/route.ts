@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/app/lib/supabase";
 
-export async function GET() {
+export async function GET(_req: NextRequest) {
   try {
     // 1. Get the default user (self-healing pattern)
     const { data: users, error: userError } = await supabase
