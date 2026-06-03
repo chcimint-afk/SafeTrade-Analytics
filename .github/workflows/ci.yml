@@ -1,0 +1,38 @@
+name: SafeTrade CI/CD Quality Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify:
+    name: Code Quality Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: app-code/package-lock.json
+
+      - name: Install Dependencies
+        run: |
+          cd app-code
+          npm ci
+
+      - name: Run ESLint (Static Analysis)
+        run: |
+          cd app-code
+          npm run lint
+
+      - name: Run TypeScript Compiler (Type Verification)
+        run: |
+          cd app-code
+          npx tsc --noEmit
