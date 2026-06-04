@@ -5,7 +5,7 @@
 
 ---
 
-## 🛠️ ЧАСТЬ 1: ТРОЙНОЙ И ШЕСТИКРАТНЫЙ АУДИТ КОДА (INSTAGRAM-МЕТОД)
+## 🛠️ ЧАСТЬ 1: SAFETRADE SECURITY & QUALITY PROTOCOL (SSQP)
 
 Каждый раз при изменении кода вы обязаны запустить проверку по всем методам из регламента безопасности. Все консольные команды запускаются строго в директории **`app-code/`**.
 
@@ -83,5 +83,5 @@
 
 ## 📂 ЧАСТЬ 3: ДОПОЛНИТЕЛЬНЫЕ ИНСТРУКЦИИ НА РАБОЧЕМ СТОЛЕ
 Для ручной проверки параметров вы можете обратиться к файлам на рабочем столе пользователя:
-* Детальное описание безопасности: `C:/Users/adaml/OneDrive/Bureau/Instagram-Method-Security.txt`
+* Детальное описание безопасности: `C:/Users/adaml/OneDrive/Bureau/SafeTrade-Security-Quality-Protocol.txt`
 * Детальное руководство по ИИ-инструментам: `C:/Users/adaml/OneDrive/Bureau/AI-Agent-Superpowers/AI-Tools-Instructions.txt`

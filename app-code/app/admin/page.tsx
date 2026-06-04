@@ -70,7 +70,7 @@ export default function Dashboard() {
     router.push("/admin/login");
   };
 
-  const [profit, setProfit] = useState(20.00);
+  const [profit, setProfit] = useState(0.00);
   const [pulse, setPulse] = useState(true);
   const [realizedProfit, setRealizedProfit] = useState(0.00);
   const [dailyProfit, setDailyProfit] = useState(0.00);
@@ -96,6 +96,18 @@ export default function Dashboard() {
   const [newsHaltedAssets, setNewsHaltedAssets] = useState<string[]>([]);
   const [activeNewsEvent, setActiveNewsEvent] = useState<{ title: string, assetType: string } | null>(null);
   const [newsCountdown, setNewsCountdown] = useState<number>(0);
+
+  // Parallel Hybrid Trading System State
+  const [maxStealthStopLoss, setMaxStealthStopLoss] = useState(3.0);
+  const [hedgingActive, setHedgingActive] = useState(true);
+  const [scalpingActive, setScalpingActive] = useState(true);
+  const [trendActive, setTrendActive] = useState(false);
+  const [trendProfit, setTrendProfit] = useState(0.0);
+  const [trendIsBreakEven, setTrendIsBreakEven] = useState(false);
+  const [scalpActive, setScalpActive] = useState(false);
+  const [scalpProfit, setScalpProfit] = useState(0.0);
+  const [hedgeActive, setHedgeActive] = useState(false);
+  const [hedgeProfit, setHedgeProfit] = useState(0.0);
   
   // Real-time Macro Assets States for absolute alive feel
   const [goldPrice, setGoldPrice] = useState(2345.50);
@@ -133,6 +145,18 @@ export default function Dashboard() {
   const bypassEodHaltRef = useRef(false);
   const newsHaltedAssetsRef = useRef<string[]>([]);
   
+  // Parallel Hybrid Trading System Refs
+  const maxStealthStopLossRef = useRef(3.0);
+  const hedgingActiveRef = useRef(true);
+  const scalpingActiveRef = useRef(true);
+  const trendActiveRef = useRef(false);
+  const trendProfitRef = useRef(0.0);
+  const trendIsBreakEvenRef = useRef(false);
+  const scalpActiveRef = useRef(false);
+  const scalpProfitRef = useRef(0.0);
+  const hedgeActiveRef = useRef(false);
+  const hedgeProfitRef = useRef(0.0);
+  
   // Sync refs with state
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
   useEffect(() => { isPanicRef.current = isPanic; }, [isPanic]);
@@ -143,6 +167,17 @@ export default function Dashboard() {
   useEffect(() => { isEodHaltedRef.current = isEodHalted; }, [isEodHalted]);
   useEffect(() => { bypassEodHaltRef.current = bypassEodHalt; }, [bypassEodHalt]);
   useEffect(() => { newsHaltedAssetsRef.current = newsHaltedAssets; }, [newsHaltedAssets]);
+
+  useEffect(() => { maxStealthStopLossRef.current = maxStealthStopLoss; }, [maxStealthStopLoss]);
+  useEffect(() => { hedgingActiveRef.current = hedgingActive; }, [hedgingActive]);
+  useEffect(() => { scalpingActiveRef.current = scalpingActive; }, [scalpingActive]);
+  useEffect(() => { trendActiveRef.current = trendActive; }, [trendActive]);
+  useEffect(() => { trendProfitRef.current = trendProfit; }, [trendProfit]);
+  useEffect(() => { trendIsBreakEvenRef.current = trendIsBreakEven; }, [trendIsBreakEven]);
+  useEffect(() => { scalpActiveRef.current = scalpActive; }, [scalpActive]);
+  useEffect(() => { scalpProfitRef.current = scalpProfit; }, [scalpProfit]);
+  useEffect(() => { hedgeActiveRef.current = hedgeActive; }, [hedgeActive]);
+  useEffect(() => { hedgeProfitRef.current = hedgeProfit; }, [hedgeProfit]);
 
   useEffect(() => {
     if (newsCountdown <= 0) return;
@@ -313,6 +348,12 @@ export default function Dashboard() {
         });
       }
 
+      // If EOD is active but bypassed, ensure autotrade is active to resume trading
+      if (isHaltPeriod && bypassEodHaltRef.current && !isAutotradeRef.current && !isPausedRef.current && !isPanicRef.current && !autoHaltedRef.current) {
+        setIsAutotrade(true);
+        isAutotradeRef.current = true;
+      }
+
       // Reset EOD halt when the safe trading day starts (at 09:00)
       if (!isHaltPeriod && isEodHaltedRef.current) {
         setIsEodHalted(false);
@@ -349,35 +390,129 @@ export default function Dashboard() {
         return;
       }
 
-      setProfit(prev => {
-        // If Bitcoin is news-halted, freeze profit and show News Shield Lock!
-        if (newsHaltedAssetsRef.current.includes("BTC")) {
-          return prev;
-        }
-        const hasReachedTarget = dailyProfitRef.current >= DAILY_TARGET;
-        const requiredSentiment = hasReachedTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD;
-        
-        if (sentimentRef.current < requiredSentiment) {
-           return prev; 
-        }
+      // --- PARALLEL HYBRID TRADING SIMULATION ---
+      const btcNewsHalted = newsHaltedAssetsRef.current.includes("BTC");
+      const hasReachedTarget = dailyProfitRef.current >= DAILY_TARGET;
+      const requiredSentiment = hasReachedTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD;
 
-        const riskScale = hasReachedTarget ? 0.5 : 1.0; 
-        const currentRisk = 0.5 * riskScale; 
-        const target = INITIAL_BALANCE * (currentRisk / 100) * 1.5;
-        const change = (Math.random() - 0.45) * 4 * riskScale; 
-        const nextProfit = prev + change;
+      // 1. Core Trend Simulation
+      let currentTrendProfit = trendProfitRef.current;
+      let isTrendActive = trendActiveRef.current;
+      let trendBE = trendIsBreakEvenRef.current;
 
-        if (isAutotradeRef.current && nextProfit >= target) {
-          realizeProfitAction(nextProfit);
-          return 0;
+      if (!btcNewsHalted && isAutotradeRef.current) {
+        if (!isTrendActive) {
+          // Entry criteria for Trend
+          if (sentimentRef.current >= requiredSentiment) {
+            isTrendActive = true;
+            currentTrendProfit = 0;
+            trendBE = false;
+            setTrendActive(true);
+            setTrendIsBreakEven(false);
+          }
+        } else {
+          // Trend active: simulate trend yield
+          const riskScale = hasReachedTarget ? 0.5 : 1.0;
+          const targetProfitAmount = INITIAL_BALANCE * (0.5 * riskScale / 100) * 1.5; 
+          const change = (Math.random() - 0.45) * 4 * riskScale;
+          currentTrendProfit += change;
+
+          // Dynamic Break-Even trigger (+50% of path to target)
+          if (!trendBE && currentTrendProfit >= targetProfitAmount * 0.5) {
+            trendBE = true;
+            setTrendIsBreakEven(true);
+          }
+
+          // Check Exit Target
+          if (currentTrendProfit >= targetProfitAmount) {
+            realizeProfitAction(currentTrendProfit);
+            isTrendActive = false;
+            currentTrendProfit = 0;
+            trendBE = false;
+            setTrendActive(false);
+            setTrendIsBreakEven(false);
+          } else {
+            // Check Stop-Loss (Stealth max 3% vs Public max 5%)
+            // Calculate equivalent cash SL based on our strict 1% total risk limit
+            const stealthSLPercent = maxStealthStopLossRef.current; 
+            const baseStopLossAmount = -(INITIAL_BALANCE * (0.5 * riskScale / 100)); // base -25 EUR SL
+            
+            let activeStopLoss = baseStopLossAmount;
+            if (trendBE) {
+              activeStopLoss = 0.0; // Break-Even locked at 0 EUR
+            }
+
+            if (currentTrendProfit <= activeStopLoss) {
+              // Trigger Correlation Hedging if enabled to recover losses
+              if (hedgingActiveRef.current) {
+                setHedgeActive(true);
+                const hedgeGain = Math.abs(currentTrendProfit) * (0.6 + Math.random() * 0.4);
+                setHedgeProfit(hedgeGain);
+                setTimeout(() => {
+                  realizeProfitAction(hedgeGain);
+                  setHedgeActive(false);
+                  setHedgeProfit(0);
+                }, 2000);
+              }
+
+              realizeProfitAction(currentTrendProfit);
+              isTrendActive = false;
+              currentTrendProfit = 0;
+              trendBE = false;
+              setTrendActive(false);
+              setTrendIsBreakEven(false);
+            }
+          }
         }
-        const stopLoss = -(INITIAL_BALANCE * (currentRisk / 100));
-        if (isAutotradeRef.current && nextProfit <= stopLoss) {
-          realizeProfitAction(nextProfit);
-          return 0;
+      }
+      setTrendProfit(currentTrendProfit);
+
+      // 2. Satellite Scalp Simulation
+      let currentScalpProfit = scalpProfitRef.current;
+      let isScalpActive = scalpActiveRef.current;
+
+      // Scalping triggers only if Trend is not active, OR Trend has been secured via Break-Even
+      const canScalpEnter = scalpingActiveRef.current && !btcNewsHalted && isAutotradeRef.current && (!isTrendActive || trendBE);
+
+      if (canScalpEnter) {
+        if (!isScalpActive) {
+          // 25% chance of finding micro-impulses on any tick
+          if (Math.random() > 0.75) {
+            isScalpActive = true;
+            currentScalpProfit = 0;
+            setScalpActive(true);
+          }
+        } else {
+          // Scalp simulated fluctuations
+          const riskScale = hasReachedTarget ? 0.5 : 1.0; 
+          const scalpTarget = 12.0 * riskScale; 
+          const scalpSL = -8.0 * riskScale; 
+          const change = (Math.random() - 0.40) * 6 * riskScale;
+          currentScalpProfit += change;
+
+          if (currentScalpProfit >= scalpTarget) {
+            realizeProfitAction(currentScalpProfit);
+            isScalpActive = false;
+            currentScalpProfit = 0;
+            setScalpActive(false);
+          } else if (currentScalpProfit <= scalpSL) {
+            realizeProfitAction(currentScalpProfit);
+            isScalpActive = false;
+            currentScalpProfit = 0;
+            setScalpActive(false);
+          }
         }
-        return nextProfit;
-      });
+      } else if (isScalpActive) {
+        // Force close if trend enters and needs immediate priority
+        realizeProfitAction(currentScalpProfit);
+        isScalpActive = false;
+        currentScalpProfit = 0;
+        setScalpActive(false);
+      }
+      setScalpProfit(currentScalpProfit);
+
+      // 3. Update global simulated floating profit
+      setProfit(currentTrendProfit + currentScalpProfit + hedgeProfitRef.current);
 
       // Live Fluctuations for Macro Assets to give terminal "breathing" state
       setGoldPrice(prev => {
@@ -517,14 +652,59 @@ export default function Dashboard() {
              </div>
           </div>
 
-          <div className="pt-2 pb-1 border-t border-white/5 mt-2">
+          <div className="pt-2 pb-1 border-t border-white/5 mt-2 space-y-3">
             <button onClick={() => setIsStealth(!isStealth)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${isStealth ? "bg-blue-600/20 border-blue-500/40 text-white" : "bg-white/5 border-white/10 text-gray-500"}`}>
               <div className="flex items-center gap-2">
                 <Ghost size={16} className={isStealth ? "text-blue-400" : ""} />
-                <span className="text-[9px] font-black uppercase tracking-widest">Stealth</span>
+                <span className="text-[9px] font-black uppercase tracking-widest">Stealth Mode</span>
               </div>
               <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${isStealth ? 'bg-blue-600' : 'bg-gray-700'}`}>
                 <div className={`w-2.5 h-2.5 bg-white rounded-full transition-transform ${isStealth ? 'translate-x-4' : ''}`} />
+              </div>
+            </button>
+
+            {isStealth && (
+              <>
+                <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-white/5 border border-white/10">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Stealth Stop-Loss</span>
+                    <span className="text-[10px] font-black text-blue-400">{maxStealthStopLoss.toFixed(1)}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="3.0" 
+                    max="5.0" 
+                    step="0.5" 
+                    value={maxStealthStopLoss} 
+                    onChange={(e) => setMaxStealthStopLoss(parseFloat(e.target.value))}
+                    className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/10">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Emergency Visible SL</span>
+                  <span className="text-[10px] font-black text-red-400">{(maxStealthStopLoss + 2.0).toFixed(1)}%</span>
+                </div>
+              </>
+            )}
+
+            <button onClick={() => setHedgingActive(!hedgingActive)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${hedgingActive ? "bg-emerald-600/20 border-emerald-500/40 text-white" : "bg-white/5 border-white/10 text-gray-500"}`}>
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className={hedgingActive ? "text-emerald-400" : ""} />
+                <span className="text-[9px] font-black uppercase tracking-widest">Hedge Filter</span>
+              </div>
+              <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${hedgingActive ? 'bg-emerald-600' : 'bg-gray-700'}`}>
+                <div className={`w-2.5 h-2.5 bg-white rounded-full transition-transform ${hedgingActive ? 'translate-x-4' : ''}`} />
+              </div>
+            </button>
+
+            <button onClick={() => setScalpingActive(!scalpingActive)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${scalpingActive ? "bg-amber-600/20 border-amber-500/40 text-white" : "bg-white/5 border-white/10 text-gray-500"}`}>
+              <div className="flex items-center gap-2">
+                <Zap size={16} className={scalpingActive ? "text-amber-400" : ""} />
+                <span className="text-[9px] font-black uppercase tracking-widest">Momentum Scalp</span>
+              </div>
+              <div className={`w-8 h-4 rounded-full p-0.5 transition-colors ${scalpingActive ? 'bg-amber-600' : 'bg-gray-700'}`}>
+                <div className={`w-2.5 h-2.5 bg-white rounded-full transition-transform ${scalpingActive ? 'translate-x-4' : ''}`} />
               </div>
             </button>
           </div>
@@ -552,9 +732,9 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="h-20 border-b border-white/5 bg-[#0d0d0f]/90 backdrop-blur-3xl flex items-center justify-between px-10 shrink-0">
-          <div className="flex items-center gap-8 overflow-hidden">
-            <h1 className="text-2xl font-black uppercase tracking-tighter truncate italic text-white/80">Institutional Terminal</h1>
-            <div className="hidden xl:flex items-center gap-8 text-[11px] font-black uppercase tracking-[0.3em] text-gray-500">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-black uppercase tracking-tighter truncate italic text-white/80 shrink-0">Institutional Terminal</h1>
+            <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
               <span className="flex items-center gap-3">
                  <span className={`w-2.5 h-2.5 rounded-full shadow-[0_0_15px] ${marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'bg-emerald-500 shadow-emerald-500' : 'bg-yellow-500 shadow-yellow-500'}`} /> 
                  Confidence: {marketSentiment.toFixed(0)}%
@@ -569,7 +749,13 @@ export default function Dashboard() {
           <div className="flex items-center gap-6">
             {isEodHalted && (
               <button 
-                onClick={() => setBypassEodHalt(!bypassEodHalt)} 
+                onClick={() => {
+                  const newVal = !bypassEodHalt;
+                  setBypassEodHalt(newVal);
+                  if (newVal) {
+                    setIsAutotrade(true);
+                  }
+                }} 
                 className={`flex items-center gap-3 px-6 py-2 rounded-full border-2 transition-all text-[11px] font-black uppercase tracking-[0.2em] ${bypassEodHalt ? "bg-amber-600 border-amber-400 text-white shadow-2xl shadow-amber-600/40" : "bg-amber-600/10 border-amber-600/30 text-amber-400 hover:bg-amber-600 hover:text-white"}`}
               >
                 <Lock size={14} className={bypassEodHalt ? "" : "animate-pulse"} />
@@ -925,10 +1111,39 @@ export default function Dashboard() {
                 </div>
 
                 {/* Side Audit Log */}
-                <div className="p-6 rounded-[2.5rem] bg-[#0d0d0f] border border-white/5 flex flex-col shadow-2xl overflow-hidden h-[320px]">
-                  <h3 className="text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-2 mb-6 text-gray-600 italic">
+                <div className="p-6 rounded-[2.5rem] bg-[#0d0d0f] border border-white/5 flex flex-col shadow-2xl overflow-hidden h-[340px] shrink-0">
+                  <h3 className="text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-2 mb-4 text-gray-600 italic">
                     <Activity size={14} className="text-blue-500" /> Audit Log
                   </h3>
+                  
+                  {/* Status Panel for Active Engines */}
+                  <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-white/10 items-center shrink-0">
+                    {!trendActive && !scalpActive && !hedgeActive && (
+                      <span className="text-[9px] font-black tracking-[0.2em] text-amber-500/80 uppercase flex items-center gap-1.5 animate-pulse bg-amber-500/5 px-3 py-1.5 rounded-full border border-amber-500/20">
+                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                        SYSTEM: SCANNING MARKET
+                      </span>
+                    )}
+                    {trendActive && (
+                      <div className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-full text-[9px] font-black tracking-wider animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.15)]" title="Трендовый робот задействует 1/3 баланса, цель +3.0%. Ожидает безубытка для запуска скальпинга">
+                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
+                        CORE ACTIVE {trendIsBreakEven && "(BE)"}
+                      </div>
+                    )}
+                    {scalpActive && (
+                      <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 px-3 py-1.5 rounded-full text-[9px] font-black tracking-wider animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.15)]" title="Скальпер совершает быстрые сделки по 7 активам при Confidence >= 80% на хвостах китов">
+                        <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                        SATELLITE ACTIVE
+                      </div>
+                    )}
+                    {hedgeActive && (
+                      <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1.5 rounded-full text-[9px] font-black tracking-wider animate-bounce shadow-[0_0_10px_rgba(16,185,129,0.15)]" title="Запущена автоматическая компенсация просадки через золото">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                        HEDGE ACTIVE (GOLD)
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                     {tradeHistory.map(trade => (
                       <div key={trade.id} className="flex justify-between items-start border-b border-white/[0.02] pb-2 last:border-0 group">
