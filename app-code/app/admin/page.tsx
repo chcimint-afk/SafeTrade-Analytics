@@ -56,8 +56,9 @@ const TERMINAL_ENV: "development" | "production" = "development";
 const NEWS_HALT_DURATION = TERMINAL_ENV === "development" ? 8 : 900; 
 
 const INITIAL_BALANCE = 5000;
-const DAILY_STOP_LOSS = -50; 
-const DAILY_TARGET = 50.00; 
+const DAILY_RISK_PERCENT = 1.0; // Dynamic daily risk percent (1.0% limit)
+const DAILY_STOP_LOSS = -(INITIAL_BALANCE * (DAILY_RISK_PERCENT / 100)); // Dynamic daily stop-loss limit
+const DAILY_TARGET = INITIAL_BALANCE * (DAILY_RISK_PERCENT / 100); // Dynamic daily target
 const BASE_SENTIMENT_THRESHOLD = 75; 
 const PROFIT_SHIELD_THRESHOLD = 80;
 
@@ -96,6 +97,9 @@ export default function Dashboard() {
   const [newsHaltedAssets, setNewsHaltedAssets] = useState<string[]>([]);
   const [activeNewsEvent, setActiveNewsEvent] = useState<{ title: string, assetType: string } | null>(null);
   const [newsCountdown, setNewsCountdown] = useState<number>(0);
+  const [unsavedLoss, setUnsavedLoss] = useState(0.00);
+  const unsavedLossRef = useRef(0.00);
+  useEffect(() => { unsavedLossRef.current = unsavedLoss; }, [unsavedLoss]);
 
   // Parallel Hybrid Trading System State
   const [maxStealthStopLoss, setMaxStealthStopLoss] = useState(3.0);
@@ -192,15 +196,42 @@ export default function Dashboard() {
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          if (data.circuit_breaker_active) {
-            setAutoHalted(true);
-            setIsPaused(true);
-            setIsAutotrade(false);
-            setProfit(0);
+          if (data.db_status === "offline") {
+            // DB is offline, check client-side simulated dailyProfit + local unsaved loss
+            const combinedDailyLoss = dailyProfitRef.current + unsavedLossRef.current;
+            const isTriggered = combinedDailyLoss <= DAILY_STOP_LOSS;
+            if (isTriggered) {
+              setAutoHalted(true);
+              setIsPaused(true);
+              setIsAutotrade(false);
+              setProfit(0);
+            }
+          } else {
+            // DB is online, combine DB profit/loss with local unsaved loss for absolute safety
+            const combinedDailyLoss = Number(data.daily_profit_loss || 0) + unsavedLossRef.current;
+            const limit = Number(data.daily_loss_limit || DAILY_STOP_LOSS);
+            const isTriggered = combinedDailyLoss <= limit || data.circuit_breaker_active;
+            if (isTriggered) {
+              setAutoHalted(true);
+              setIsPaused(true);
+              setIsAutotrade(false);
+              setProfit(0);
+            }
           }
         }
       })
-      .catch(err => console.error("Error checking circuit breaker:", err));
+      .catch(err => {
+        console.error("Error checking circuit breaker:", err);
+        // Fallback to client-side check on request failure
+        const combinedDailyLoss = dailyProfitRef.current + unsavedLossRef.current;
+        const isTriggered = combinedDailyLoss <= DAILY_STOP_LOSS;
+        if (isTriggered) {
+          setAutoHalted(true);
+          setIsPaused(true);
+          setIsAutotrade(false);
+          setProfit(0);
+        }
+      });
   }, []);
 
   useEffect(() => {
@@ -287,6 +318,10 @@ export default function Dashboard() {
       ...prev.slice(0, 10)
     ]);
 
+    // News Shield Asset Isolation: Find the first priority asset that is not news-halted
+    const priorityAssets = ["BTC", "SPX", "GOLD", "TSLA", "EURUSD", "NDX"];
+    const activeTradingAsset = priorityAssets.find(asset => !newsHaltedAssetsRef.current.includes(asset)) || "GOLD";
+
     // Secure server-side DB recording (Supabase) via Next.js API route
     fetch('/api/trading/record-trade', {
       method: 'POST',
@@ -294,7 +329,7 @@ export default function Dashboard() {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        asset: newsHaltedAssetsRef.current.includes("BTC") ? "SPX" : "BTC",
+        asset: activeTradingAsset,
         direction: netAmount >= 0 ? "BUY" : "SELL",
         entry_price: 68500.00,
         exit_price: 68500.00 + netAmount,
@@ -307,9 +342,18 @@ export default function Dashboard() {
     .then(res => res.json())
     .then(data => {
       console.log("DB Trade logged:", data);
+      if (data.success && !data.db_saved) {
+        // Accumulate unsaved loss/profit locally in client memory if DB insertion fell back
+        setUnsavedLoss(prev => prev + netAmount);
+      }
       checkCircuitBreaker();
     })
-    .catch(err => console.error("DB logging failed:", err));
+    .catch(err => {
+      console.error("DB logging failed:", err);
+      // Accumulate as unsaved loss in client memory on fetch crash
+      setUnsavedLoss(prev => prev + netAmount);
+      checkCircuitBreaker();
+    });
 
   }, [playCashSound, isStealth, checkCircuitBreaker]);
 
@@ -328,10 +372,17 @@ export default function Dashboard() {
         })
         .catch(err => console.error("Polled circuit breaker check failed:", err));
 
-      // 1. Check for EOD halt (Belgium/European Time: sleep from 18:00 to 09:00)
+      // 1. Check for EOD halt (Brussels/European Time: sleep from 18:00 to 09:00)
       const now = new Date();
-      const currentHour = now.getHours();
-      const isHaltPeriod = currentHour >= 18 || currentHour < 9;
+      const brusselsHour = parseInt(
+        new Intl.DateTimeFormat("en-US", {
+          timeZone: "Europe/Brussels",
+          hour: "2-digit",
+          hour12: false
+        }).format(now),
+        10
+      );
+      const isHaltPeriod = brusselsHour >= 18 || brusselsHour < 9;
 
       if (isHaltPeriod && !bypassEodHaltRef.current && !isEodHaltedRef.current) {
         setIsEodHalted(true);
@@ -474,40 +525,33 @@ export default function Dashboard() {
       // Scalping triggers only if Trend is not active, OR Trend has been secured via Break-Even
       const canScalpEnter = scalpingActiveRef.current && !btcNewsHalted && isAutotradeRef.current && (!isTrendActive || trendBE);
 
-      if (canScalpEnter) {
-        if (!isScalpActive) {
-          // 25% chance of finding micro-impulses on any tick
-          if (Math.random() > 0.75) {
-            isScalpActive = true;
-            currentScalpProfit = 0;
-            setScalpActive(true);
-          }
-        } else {
-          // Scalp simulated fluctuations
-          const riskScale = hasReachedTarget ? 0.5 : 1.0; 
-          const scalpTarget = 12.0 * riskScale; 
-          const scalpSL = -8.0 * riskScale; 
-          const change = (Math.random() - 0.40) * 6 * riskScale;
-          currentScalpProfit += change;
+      // If a scalp position is active, always manage it until it closes naturally via SL/TP
+      if (isScalpActive) {
+        const riskScale = hasReachedTarget ? 0.5 : 1.0; 
+        const scalpTarget = 12.0 * riskScale; 
+        const scalpSL = -8.0 * riskScale; 
+        const change = (Math.random() - 0.40) * 6 * riskScale;
+        currentScalpProfit += change;
 
-          if (currentScalpProfit >= scalpTarget) {
-            realizeProfitAction(currentScalpProfit);
-            isScalpActive = false;
-            currentScalpProfit = 0;
-            setScalpActive(false);
-          } else if (currentScalpProfit <= scalpSL) {
-            realizeProfitAction(currentScalpProfit);
-            isScalpActive = false;
-            currentScalpProfit = 0;
-            setScalpActive(false);
-          }
+        if (currentScalpProfit >= scalpTarget) {
+          realizeProfitAction(currentScalpProfit);
+          isScalpActive = false;
+          currentScalpProfit = 0;
+          setScalpActive(false);
+        } else if (currentScalpProfit <= scalpSL) {
+          realizeProfitAction(currentScalpProfit);
+          isScalpActive = false;
+          currentScalpProfit = 0;
+          setScalpActive(false);
         }
-      } else if (isScalpActive) {
-        // Force close if trend enters and needs immediate priority
-        realizeProfitAction(currentScalpProfit);
-        isScalpActive = false;
-        currentScalpProfit = 0;
-        setScalpActive(false);
+      } else if (canScalpEnter) {
+        // Only open new scalp entries if permitted
+        // 25% chance of finding micro-impulses on any tick
+        if (Math.random() > 0.75) {
+          isScalpActive = true;
+          currentScalpProfit = 0;
+          setScalpActive(true);
+        }
       }
       setScalpProfit(currentScalpProfit);
 

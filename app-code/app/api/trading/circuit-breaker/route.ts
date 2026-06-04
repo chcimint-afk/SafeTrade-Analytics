@@ -10,8 +10,11 @@ export async function GET(_req: NextRequest) {
       .limit(1);
 
     let user;
+    let isOffline = false;
+
     if (userError) {
       console.warn("Supabase user fetch error in circuit-breaker, using fallback user:", userError.message);
+      isOffline = true;
       user = {
         id: "00000000-0000-0000-0000-000000000000",
         daily_loss_limit: -50.00,
@@ -28,16 +31,17 @@ export async function GET(_req: NextRequest) {
           starting_balance: 5000.00,
           current_balance: 5000.00,
           compounding_status: true,
-          daily_loss_limit: -50.00,
+          daily_loss_limit: -1.00, // Storing as -1.00 (representing 1% dynamically)
         })
         .select()
         .single();
 
       if (insertError) {
         console.warn("Supabase user seeding error in circuit-breaker, using fallback user:", insertError.message);
+        isOffline = true;
         user = {
           id: "00000000-0000-0000-0000-000000000000",
-          daily_loss_limit: -50.00,
+          daily_loss_limit: -1.00,
           starting_balance: 5000.00
         };
       } else {
@@ -46,7 +50,14 @@ export async function GET(_req: NextRequest) {
     }
 
     const userId = user.id;
-    const dailyLossLimit = Number(user.daily_loss_limit || -50.00); // e.g. -50.00
+    const startingBalance = Number(user.starting_balance || 5000.00);
+    const rawLimit = Number(user.daily_loss_limit || -1.00);
+
+    // Dynamic Percentage Check: if absolute value is <= 5.0 (e.g. 1.0 or 2.0 or -1.0), it's a percentage
+    let dailyLossLimit = rawLimit;
+    if (Math.abs(rawLimit) > 0 && Math.abs(rawLimit) <= 5.0) {
+      dailyLossLimit = -(startingBalance * (Math.abs(rawLimit) / 100));
+    }
 
     // 2. Query today's trades (UTC day start)
     const startOfDay = new Date();
@@ -62,6 +73,7 @@ export async function GET(_req: NextRequest) {
     let tradesList = trades;
     if (tradesError) {
       console.warn("Supabase trades fetch error in circuit-breaker, using empty trades list:", tradesError.message);
+      isOffline = true;
       tradesList = [];
     }
 
@@ -71,10 +83,10 @@ export async function GET(_req: NextRequest) {
       0
     );
 
-    // 4. Circuit Breaker trigger logic: if losses exceed limit (are more negative than -50, i.e., <= -50)
+    // 4. Circuit Breaker trigger logic: if losses exceed limit
     const isTriggered = dailyProfitLoss <= dailyLossLimit;
 
-    if (isTriggered) {
+    if (isTriggered && !isOffline) {
       // Check if we have already logged a circuit breaker trigger today to avoid spamming the log table
       const { data: existingLogs } = await supabase
         .from("system_logs")
@@ -100,6 +112,7 @@ export async function GET(_req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      db_status: isOffline ? "offline" : "online",
       user_id: userId,
       daily_profit_loss: dailyProfitLoss,
       daily_loss_limit: dailyLossLimit,

@@ -83,8 +83,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     let recordedTrade = trade;
+    let dbSaved = true;
     if (tradeError) {
       console.warn("Supabase trade insertion error, using fallback simulated trade:", tradeError.message);
+      dbSaved = false;
       recordedTrade = {
         id: Math.floor(Math.random() * 1000000),
         user_id: userId,
@@ -113,6 +115,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      db_saved: dbSaved,
       trade: recordedTrade,
     });
   } catch (error: unknown) {
