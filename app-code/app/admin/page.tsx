@@ -93,10 +93,16 @@ export default function Dashboard() {
   const [trendActive, setTrendActive] = useState(false);
   const [trendProfit, setTrendProfit] = useState(0.0);
   const [trendIsBreakEven, setTrendIsBreakEven] = useState(false);
+  const [trendIsTrailing, setTrendIsTrailing] = useState(false);
   const [scalpActive, setScalpActive] = useState(false);
   const [scalpProfit, setScalpProfit] = useState(0.0);
   const [hedgeActive, setHedgeActive] = useState(false);
   const [hedgeProfit, setHedgeProfit] = useState(0.0);
+
+  // Slippage Feedback Loop & Bounded Balance
+  const [averageSlippagePips, setAverageSlippagePips] = useState(0.15);
+  const [scalpVirtualBalanceCap, setScalpVirtualBalanceCap] = useState(150000);
+  const [scalperSleepMode, setScalperSleepMode] = useState(false);
   
   // Real-time Macro Assets States for absolute alive feel
   const [goldPrice, setGoldPrice] = useState(2345.50);
@@ -144,10 +150,16 @@ export default function Dashboard() {
   const trendActiveRef = useRef(false);
   const trendProfitRef = useRef(0.0);
   const trendIsBreakEvenRef = useRef(false);
+  const trendIsTrailingRef = useRef(false);
   const scalpActiveRef = useRef(false);
   const scalpProfitRef = useRef(0.0);
   const hedgeActiveRef = useRef(false);
   const hedgeProfitRef = useRef(0.0);
+
+  const maxTrendProfitRef = useRef(0.0);
+  const slippageHistoryRef = useRef<number[]>([]);
+  const scalpVirtualBalanceCapRef = useRef(150000);
+  const scalperSleepModeRef = useRef(false);
   
   // Sync refs with state
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
@@ -168,10 +180,13 @@ export default function Dashboard() {
   useEffect(() => { trendActiveRef.current = trendActive; }, [trendActive]);
   useEffect(() => { trendProfitRef.current = trendProfit; }, [trendProfit]);
   useEffect(() => { trendIsBreakEvenRef.current = trendIsBreakEven; }, [trendIsBreakEven]);
+  useEffect(() => { trendIsTrailingRef.current = trendIsTrailing; }, [trendIsTrailing]);
   useEffect(() => { scalpActiveRef.current = scalpActive; }, [scalpActive]);
   useEffect(() => { scalpProfitRef.current = scalpProfit; }, [scalpProfit]);
   useEffect(() => { hedgeActiveRef.current = hedgeActive; }, [hedgeActive]);
   useEffect(() => { hedgeProfitRef.current = hedgeProfit; }, [hedgeProfit]);
+  useEffect(() => { scalpVirtualBalanceCapRef.current = scalpVirtualBalanceCap; }, [scalpVirtualBalanceCap]);
+  useEffect(() => { scalperSleepModeRef.current = scalperSleepMode; }, [scalperSleepMode]);
 
   useEffect(() => {
     if (newsCountdown <= 0) return;
@@ -329,6 +344,32 @@ export default function Dashboard() {
     const slippage = Math.abs(amount * (Math.random() * 0.002) * slippageMultiplier); 
     const netAmount = amount - commission - slippage;
 
+    // Slippage feedback loop (pips calculation)
+    const threatMultiplier = threatLevel === "High" ? 2.5 : threatLevel === "Medium" ? 1.5 : 1.0;
+    const newPipSlippage = (Math.random() * 0.3) * threatMultiplier * slippageMultiplier;
+    const newHistory = [...slippageHistoryRef.current, newPipSlippage].slice(-10);
+    slippageHistoryRef.current = newHistory;
+    const avgSlippage = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
+    setAverageSlippagePips(avgSlippage);
+
+    // Dynamic virtual cap mapping
+    let newCap = 150000;
+    let sleepMode = false;
+    if (avgSlippage >= 1.0) {
+      sleepMode = true;
+      newCap = 50000;
+    } else if (avgSlippage >= 0.6) {
+      newCap = 50000;
+    } else if (avgSlippage >= 0.5) {
+      newCap = 80000;
+    } else if (avgSlippage >= 0.4) {
+      newCap = 100000;
+    } else if (avgSlippage >= 0.3) {
+      newCap = 120000;
+    }
+    setScalpVirtualBalanceCap(newCap);
+    setScalperSleepMode(sleepMode);
+
     // Define execution block
     const executeTradeExecution = (amt: number, comm: number, slip: number, isLastSlice: boolean, sliceIndex?: number, totalSlices?: number) => {
       if (amt > 0 && isLastSlice) playCashSound();
@@ -431,7 +472,7 @@ export default function Dashboard() {
       executeTradeExecution(netAmount, commission, slippage, true);
     }
 
-  }, [playCashSound, isStealth, checkCircuitBreaker, queueRequest]);
+  }, [playCashSound, isStealth, checkCircuitBreaker, queueRequest, threatLevel]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -448,7 +489,7 @@ export default function Dashboard() {
         })
         .catch(err => console.error("Polled circuit breaker check failed:", err));
 
-      // 1. Check for EOD halt (Brussels/European Time: sleep from 18:00 to 09:00)
+      // 1. Check for EOD/Weekend/Holiday halt (Brussels/European Time: sleep from 18:00 to 09:00, or all day on Sat/Sun/Holidays)
       const now = new Date();
       const brusselsHour = parseInt(
         new Intl.DateTimeFormat("en-US", {
@@ -458,7 +499,19 @@ export default function Dashboard() {
         }).format(now),
         10
       );
-      const isHaltPeriod = brusselsHour >= 18 || brusselsHour < 9;
+      const brusselsDay = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Europe/Brussels",
+        weekday: "short"
+      }).format(now);
+      const brusselsMonthDay = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Europe/Brussels",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(now); // MM/DD format (e.g. "01/01" for New Year, "12/25" for Christmas)
+
+      const isWeekend = brusselsDay === "Sat" || brusselsDay === "Sun";
+      const isHoliday = brusselsMonthDay === "01/01" || brusselsMonthDay === "12/25" || brusselsMonthDay === "12/26" || brusselsMonthDay === "05/01";
+      const isHaltPeriod = brusselsHour >= 18 || brusselsHour < 9 || isWeekend || isHoliday;
 
       if (isHaltPeriod && !bypassEodHaltRef.current && !isEodHaltedRef.current) {
         setIsEodHalted(true);
@@ -473,6 +526,24 @@ export default function Dashboard() {
           }
           return 0;
         });
+
+        // Reset all active robot states
+        setTrendActive(false);
+        trendActiveRef.current = false;
+        setTrendIsBreakEven(false);
+        trendIsBreakEvenRef.current = false;
+        setTrendIsTrailing(false);
+        trendIsTrailingRef.current = false;
+        setScalpActive(false);
+        scalpActiveRef.current = false;
+        setHedgeActive(false);
+        hedgeActiveRef.current = false;
+        setHedgeProfit(0);
+        hedgeProfitRef.current = 0;
+        trendProfitRef.current = 0;
+        scalpProfitRef.current = 0;
+        setTrendProfit(0);
+        setScalpProfit(0);
       }
 
       // If EOD is active but bypassed, ensure autotrade is active to resume trading
@@ -540,8 +611,10 @@ export default function Dashboard() {
             isTrendActive = true;
             currentTrendProfit = 0;
             trendBE = false;
+            maxTrendProfitRef.current = 0;
             setTrendActive(true);
             setTrendIsBreakEven(false);
+            setTrendIsTrailing(false);
           }
         } else {
           // Trend active: simulate trend yield
@@ -550,14 +623,29 @@ export default function Dashboard() {
           if (remainingLossLimitPercent < 1.0) {
             trendRiskScale = Math.max(0.1, remainingLossLimitPercent);
           }
-          const targetProfitAmount = INITIAL_BALANCE * (0.5 * trendRiskScale / 100) * 1.5; 
+          const targetProfitAmount = INITIAL_BALANCE * (3.0 * trendRiskScale / 100); // Trend TP target is +3% of balance
           const change = (Math.random() - 0.45) * 4 * trendRiskScale;
           currentTrendProfit += change;
 
-          // Dynamic Break-Even trigger (+50% of path to target)
+          // Update peak profit
+          maxTrendProfitRef.current = Math.max(maxTrendProfitRef.current, currentTrendProfit);
+
+          // Dynamic Break-Even trigger (+50% of path to target, i.e., +1.5%)
           if (!trendBE && currentTrendProfit >= targetProfitAmount * 0.5) {
             trendBE = true;
             setTrendIsBreakEven(true);
+          }
+
+          // Trailing Stop calculations
+          const trailingActivateAmount = INITIAL_BALANCE * (2.0 * trendRiskScale / 100);
+          const trailingDistance = INITIAL_BALANCE * (0.5 * trendRiskScale / 100);
+          let isTrailingActive = false;
+
+          if (maxTrendProfitRef.current >= trailingActivateAmount) {
+            isTrailingActive = true;
+            if (!trendIsTrailingRef.current) {
+              setTrendIsTrailing(true);
+            }
           }
 
           // Check Exit Target
@@ -568,14 +656,20 @@ export default function Dashboard() {
             trendBE = false;
             setTrendActive(false);
             setTrendIsBreakEven(false);
+            setTrendIsTrailing(false);
           } else {
             // Check Stop-Loss (Stealth max 3% vs Public max 5%)
             // Calculate equivalent cash SL based on our strict 1% total risk limit
-            const baseStopLossAmount = -(INITIAL_BALANCE * (0.5 * trendRiskScale / 100)); // base -25 EUR SL
+            const baseStopLossAmount = -(INITIAL_BALANCE * (1.0 * trendRiskScale / 100)); // base -1.0% SL (50 EUR)
             
             let activeStopLoss = baseStopLossAmount;
             if (trendBE) {
               activeStopLoss = 0.0; // Break-Even locked at 0 EUR
+            }
+
+            if (isTrailingActive) {
+              const trailingStopLossAmount = maxTrendProfitRef.current - trailingDistance;
+              activeStopLoss = Math.max(activeStopLoss, trailingStopLossAmount);
             }
 
             if (currentTrendProfit <= activeStopLoss) {
@@ -597,6 +691,7 @@ export default function Dashboard() {
               trendBE = false;
               setTrendActive(false);
               setTrendIsBreakEven(false);
+              setTrendIsTrailing(false);
             }
           }
         }
@@ -608,7 +703,7 @@ export default function Dashboard() {
       let isScalpActive = scalpActiveRef.current;
 
       // Scalping triggers only if Trend is not active, OR Trend has been secured via Break-Even
-      const canScalpEnter = scalpingActiveRef.current && !btcNewsHalted && isAutotradeRef.current && (!isTrendActive || trendBE);
+      const canScalpEnter = scalpingActiveRef.current && !scalperSleepModeRef.current && !btcNewsHalted && isAutotradeRef.current && (!isTrendActive || trendBE);
 
       // If a scalp position is active, always manage it until it closes naturally via SL/TP
       if (isScalpActive) {
@@ -616,8 +711,12 @@ export default function Dashboard() {
         if (remainingLossLimitPercent < 0.25) {
           scalpRiskScale = Math.max(0.1, remainingLossLimitPercent / 0.25);
         }
-        const scalpSL = -(INITIAL_BALANCE * (0.25 / 100)) * scalpRiskScale; 
-        const scalpTarget = (INITIAL_BALANCE * (0.375 / 100)) * scalpRiskScale; 
+        
+        // Virtual Bounded Balance: scalp working balance is scaled by virtual balance cap ratio
+        const scalpWorkingBalance = INITIAL_BALANCE * (scalpVirtualBalanceCapRef.current / 150000);
+
+        const scalpSL = -(scalpWorkingBalance * (0.25 / 100)) * scalpRiskScale; 
+        const scalpTarget = (scalpWorkingBalance * (0.375 / 100)) * scalpRiskScale; 
         const change = (Math.random() - 0.40) * 6 * scalpRiskScale;
         currentScalpProfit += change;
 
@@ -713,7 +812,36 @@ export default function Dashboard() {
       if (Math.random() > 0.96) {
         const assets = ["BTC", "ETH", "GOLD", "TSLA", "SPUS", "EURUSD", "NDX"];
         const asset = assets[Math.floor(Math.random() * assets.length)];
-        setWhaleAlert({ asset, amount: `$${(Math.random() * 50 + 10).toFixed(1)}M` });
+        const isDistribution = Math.random() > 0.5; // 50% chance of Distribution vs Accumulation
+        const directionStr = isDistribution ? "DISTRIBUTION" : "ACCUMULATION";
+        setWhaleAlert({ asset, amount: `$${(Math.random() * 50 + 10).toFixed(1)}M (${directionStr})` });
+        
+        // If it's a Whale Distribution, close all active long-positions immediately
+        if (isDistribution) {
+          // If Trend robot is active, force-close it immediately
+          if (trendActiveRef.current) {
+            realizeProfitAction(trendProfitRef.current);
+            setTrendActive(false);
+            trendActiveRef.current = false;
+            setTrendIsBreakEven(false);
+            trendIsBreakEvenRef.current = false;
+            setTrendIsTrailing(false);
+            trendIsTrailingRef.current = false;
+            trendProfitRef.current = 0;
+            setTrendProfit(0);
+          }
+          // If Scalping is active, force-close it immediately
+          if (scalpActiveRef.current) {
+            realizeProfitAction(scalpProfitRef.current);
+            setScalpActive(false);
+            scalpActiveRef.current = false;
+            scalpProfitRef.current = 0;
+            setScalpProfit(0);
+          }
+          // Reset simulated floating profit to 0
+          setProfit(0);
+        }
+        
         setTimeout(() => setWhaleAlert(null), 4000);
       }
       setPulse(p => !p);
@@ -727,6 +855,25 @@ export default function Dashboard() {
       return;
     }
     setIsPanic(true); setIsPaused(true); setIsAutotrade(false); setProfit(0);
+    
+    // Reset all active robot states
+    setTrendActive(false);
+    trendActiveRef.current = false;
+    setTrendIsBreakEven(false);
+    trendIsBreakEvenRef.current = false;
+    setTrendIsTrailing(false);
+    trendIsTrailingRef.current = false;
+    setScalpActive(false);
+    scalpActiveRef.current = false;
+    setHedgeActive(false);
+    hedgeActiveRef.current = false;
+    setHedgeProfit(0);
+    hedgeProfitRef.current = 0;
+    trendProfitRef.current = 0;
+    scalpProfitRef.current = 0;
+    setTrendProfit(0);
+    setScalpProfit(0);
+    
     setTradeHistory(prev => [{ id: Math.random(), type: 'EMERGENCY HALT', amount: 0, time: new Date().toLocaleTimeString(), fee: 0 }, ...prev.slice(0, 5)]);
   };
 
@@ -734,7 +881,7 @@ export default function Dashboard() {
     <div className={`flex h-screen bg-[#0a0a0b] text-gray-100 font-sans selection:bg-blue-500/30 transition-colors duration-500 ${showFlash ? 'bg-emerald-500/10' : ''} ${isPanic || autoHalted ? 'bg-red-950/30' : recoveryMode ? 'bg-blue-950/20' : ''}`}>
       {whaleAlert && (
         <div className="fixed top-24 right-10 z-[100] animate-bounce">
-          <div className="bg-emerald-500 text-black px-12 py-6 rounded-[2.5rem] font-black shadow-2xl shadow-emerald-500/40 flex items-center gap-8 border-4 border-white/40">
+          <div className={`${whaleAlert.amount.includes("DISTRIBUTION") ? "bg-amber-600 text-white shadow-amber-500/40" : "bg-emerald-500 text-black shadow-emerald-500/40"} px-12 py-6 rounded-[2.5rem] font-black shadow-2xl flex items-center gap-8 border-4 border-white/40`}>
             <Waves size={32} className="animate-pulse" />
             <div>
               <p className="text-xs uppercase tracking-[0.4em] font-bold">Whale Pulse</p>
@@ -839,6 +986,25 @@ export default function Dashboard() {
                 <div className={`w-2.5 h-2.5 bg-white rounded-full transition-transform ${scalpingActive ? 'translate-x-4' : ''}`} />
               </div>
             </button>
+
+            {scalpingActive && (
+              <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-wider">
+                <div className="flex justify-between items-center text-gray-400">
+                  <span>Slippage Loop</span>
+                  <span className={scalperSleepMode ? "text-red-400 animate-pulse" : "text-emerald-400"}>
+                    {scalperSleepMode ? "SLEEP" : "ACTIVE"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-gray-400">
+                  <span>Avg Slippage</span>
+                  <span className="text-white">{averageSlippagePips.toFixed(2)} PIPS</span>
+                </div>
+                <div className="flex justify-between items-center text-gray-400">
+                  <span>Virtual Cap</span>
+                  <span className="text-blue-400">€{(scalpVirtualBalanceCap / 1000).toFixed(0)}k</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="p-4 rounded-2xl bg-[#121214] border border-white/10 mt-4 shadow-xl relative z-20">
@@ -1275,7 +1441,7 @@ export default function Dashboard() {
                     {trendActive && (
                       <div className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-3 py-1.5 rounded-full text-[9px] font-black tracking-wider animate-pulse shadow-[0_0_10px_rgba(59,130,246,0.15)]" title="Трендовый робот задействует 1/3 баланса, цель +3.0%. Ожидает безубытка для запуска скальпинга">
                         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-                        CORE ACTIVE {trendIsBreakEven && "(BE)"}
+                        CORE ACTIVE {trendIsTrailing ? "(TS)" : trendIsBreakEven ? "(BE)" : ""}
                       </div>
                     )}
                     {scalpActive && (
