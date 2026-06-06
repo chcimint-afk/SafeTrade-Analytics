@@ -525,6 +525,12 @@ export default function Dashboard() {
       const hasReachedTarget = dailyProfitRef.current >= DAILY_TARGET;
       const requiredSentiment = hasReachedTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD;
 
+      // Calculate remaining daily loss limit in percent of starting balance
+      const remainingLossLimitPercent = (DAILY_STOP_LOSS - dailyProfitRef.current) / -INITIAL_BALANCE;
+
+      // Zone Flags
+      const isTrendBlockedByLimit = remainingLossLimitPercent < 0.5;
+
       // 1. Core Trend Simulation
       let currentTrendProfit = trendProfitRef.current;
       let isTrendActive = trendActiveRef.current;
@@ -532,8 +538,8 @@ export default function Dashboard() {
 
       if (!btcNewsHalted && isAutotradeRef.current) {
         if (!isTrendActive) {
-          // Entry criteria for Trend
-          if (sentimentRef.current >= requiredSentiment) {
+          // Entry criteria for Trend (only if remaining daily limit is >= 0.5%)
+          if (!isTrendBlockedByLimit && sentimentRef.current >= requiredSentiment) {
             isTrendActive = true;
             currentTrendProfit = 0;
             trendBE = false;
@@ -542,9 +548,13 @@ export default function Dashboard() {
           }
         } else {
           // Trend active: simulate trend yield
-          const riskScale = hasReachedTarget ? 0.5 : 1.0;
-          const targetProfitAmount = INITIAL_BALANCE * (0.5 * riskScale / 100) * 1.5; 
-          const change = (Math.random() - 0.45) * 4 * riskScale;
+          // Scale trend risk dynamically if remaining daily loss limit is less than 1.0%
+          let trendRiskScale = hasReachedTarget ? 0.5 : 1.0;
+          if (remainingLossLimitPercent < 1.0) {
+            trendRiskScale = Math.max(0.1, remainingLossLimitPercent);
+          }
+          const targetProfitAmount = INITIAL_BALANCE * (0.5 * trendRiskScale / 100) * 1.5; 
+          const change = (Math.random() - 0.45) * 4 * trendRiskScale;
           currentTrendProfit += change;
 
           // Dynamic Break-Even trigger (+50% of path to target)
@@ -564,7 +574,7 @@ export default function Dashboard() {
           } else {
             // Check Stop-Loss (Stealth max 3% vs Public max 5%)
             // Calculate equivalent cash SL based on our strict 1% total risk limit
-            const baseStopLossAmount = -(INITIAL_BALANCE * (0.5 * riskScale / 100)); // base -25 EUR SL
+            const baseStopLossAmount = -(INITIAL_BALANCE * (0.5 * trendRiskScale / 100)); // base -25 EUR SL
             
             let activeStopLoss = baseStopLossAmount;
             if (trendBE) {
@@ -605,10 +615,13 @@ export default function Dashboard() {
 
       // If a scalp position is active, always manage it until it closes naturally via SL/TP
       if (isScalpActive) {
-        const riskScale = hasReachedTarget ? 0.5 : 1.0; 
-        const scalpTarget = 12.0 * riskScale; 
-        const scalpSL = -8.0 * riskScale; 
-        const change = (Math.random() - 0.40) * 6 * riskScale;
+        let scalpRiskScale = hasReachedTarget ? 0.5 : 1.0;
+        if (remainingLossLimitPercent < 0.25) {
+          scalpRiskScale = Math.max(0.1, remainingLossLimitPercent / 0.25);
+        }
+        const scalpTarget = 12.0 * scalpRiskScale; 
+        const scalpSL = -8.0 * scalpRiskScale; 
+        const change = (Math.random() - 0.40) * 6 * scalpRiskScale;
         currentScalpProfit += change;
 
         if (currentScalpProfit >= scalpTarget) {
