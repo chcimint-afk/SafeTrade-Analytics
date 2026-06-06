@@ -277,17 +277,14 @@ export default function Dashboard() {
 
     // Simulated overflow: if too many orders are fragmented at once (e.g. > 10 items in queue)
     if (newLen > 10) {
-      console.error("[API Rate Shield] RATE LIMIT EXCEEDED (HTTP 429). Entering 5-second Cooldown.");
+      console.error("[API Rate Shield] RATE LIMIT EXCEEDED (HTTP 429). Entering 5-second Cooldown. Queue paused.");
       setApiLoadState("COOLDOWN");
       apiLoadStateRef.current = "COOLDOWN";
-      executionQueueRef.current = [];
-      setApiQueueCount(0);
-      apiQueueCountRef.current = 0;
 
       setTimeout(() => {
         setApiLoadState("OK");
         apiLoadStateRef.current = "OK";
-        console.log("[API Rate Shield] Cooldown finished. API ready.");
+        console.log("[API Rate Shield] Cooldown finished. Resuming API queue execution.");
       }, 5000);
     } else if (apiLoadStateRef.current === "OK") {
       setApiLoadState("QUEUED");
@@ -526,7 +523,7 @@ export default function Dashboard() {
       const requiredSentiment = hasReachedTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD;
 
       // Calculate remaining daily loss limit in percent of starting balance
-      const remainingLossLimitPercent = (DAILY_STOP_LOSS - dailyProfitRef.current) / -INITIAL_BALANCE;
+      const remainingLossLimitPercent = ((DAILY_STOP_LOSS - dailyProfitRef.current) / -INITIAL_BALANCE) * 100;
 
       // Zone Flags
       const isTrendBlockedByLimit = remainingLossLimitPercent < 0.5;
