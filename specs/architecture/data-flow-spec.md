@@ -25,7 +25,7 @@ graph TD
 
     %% Шлюз API и Безопасность
     TradeLoop -->|API Request: POST /api/trading/record-trade| RateShield{API Rate Shield: FIFO Queue}
-    RateShield -->|Throttled Requests: max 8 req/sec| NextAPI[Next.js Server API Routes]
+    RateShield -->|Throttled Requests: max 70% of Gateway Limit| NextAPI[Next.js Server API Routes]
     
     %% Сервер и База Данных
     NextAPI -->|Авторизованный контекст JWT Cookie| DB[(Supabase Postgres DB)]
@@ -100,7 +100,7 @@ graph TD
   1. Рассчитывается объем лота (риск ровно 1% от баланса).
   2. Рассчитывается уровень Stealth SL (например, 3% = 58,200 EUR) и Emergency Visible SL (Stealth SL + 2% = 5% = 57,000 EUR).
   3. Запрос на отправку ордера фрагментируется на микро-лоты (Stealth Mode) и помещается в FIFO-очередь **API Rate Shield**.
-  4. Ордера выходят из очереди с задержкой 125мс (8 запросов/сек). Статус API на панели кратковременно переходит в `QUEUED`.
+  4. Ордера выходят из очереди с динамической задержкой (рассчитывается на уровне 70% от лимита активного шлюза: например, 142мс для лимита 10/сек, 28мс для лимита 50/сек). Статус API на панели переходит в `QUEUED`.
 * **Результат:** Сделка отправляется на сервер и открывается.
 
 ### Шаг 5: Мониторинг сделки и закрытие (Trade Loop Monitoring)
