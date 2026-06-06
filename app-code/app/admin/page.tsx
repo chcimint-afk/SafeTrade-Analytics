@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { 
@@ -8,41 +8,24 @@ import {
   TrendingUp, 
   ShieldCheck, 
   Activity,
-  ArrowUpRight,
-  Wallet,
-  Bell,
   Zap,
   Flame,
-  Calendar,
   Waves,
-  Briefcase,
   Lock,
-  PieChart,
-  Settings,
   ShieldAlert,
   Coins,
   Gem,
   Globe,
   BarChart3,
-  Percent,
   AlertCircle,
-  ZapOff,
-  Rocket,
   Ghost,
-  EyeOff,
-  Target,
   Trophy,
   BarChart4,
-  CheckCircle2,
   LockIcon,
   ShieldEllipsis,
   Cpu,
-  Search,
   Database,
-  Fingerprint,
-  TrendingDown,
   History,
-  TrendingUpIcon,
   Award,
   CircleDollarSign,
   Radar
@@ -72,7 +55,7 @@ export default function Dashboard() {
   };
 
   const [profit, setProfit] = useState(0.00);
-  const [pulse, setPulse] = useState(true);
+  const [_pulse, setPulse] = useState(true);
   const [realizedProfit, setRealizedProfit] = useState(0.00);
   const [dailyProfit, setDailyProfit] = useState(0.00);
   const [totalCommissions, setTotalCommissions] = useState(0.00);
@@ -82,6 +65,8 @@ export default function Dashboard() {
   const [isPanic, setIsPanic] = useState(false);
   const [isStealth, setIsStealth] = useState(true);
   const [autoHalted, setAutoHalted] = useState(false);
+  const [apiLoadState, setApiLoadState] = useState<"OK" | "QUEUED" | "COOLDOWN">("OK");
+  const [apiQueueCount, setApiQueueCount] = useState(0);
   const [marketSentiment, setMarketSentiment] = useState(72); 
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [closedTradesCount, setClosedTradesCount] = useState(0);
@@ -148,6 +133,9 @@ export default function Dashboard() {
   const isEodHaltedRef = useRef(false);
   const bypassEodHaltRef = useRef(false);
   const newsHaltedAssetsRef = useRef<string[]>([]);
+  const apiLoadStateRef = useRef<"OK" | "QUEUED" | "COOLDOWN">("OK");
+  const apiQueueCountRef = useRef(0);
+  const executionQueueRef = useRef<{ id: number; action: () => void; description: string }[]>([]);
   
   // Parallel Hybrid Trading System Refs
   const maxStealthStopLossRef = useRef(3.0);
@@ -171,6 +159,8 @@ export default function Dashboard() {
   useEffect(() => { isEodHaltedRef.current = isEodHalted; }, [isEodHalted]);
   useEffect(() => { bypassEodHaltRef.current = bypassEodHalt; }, [bypassEodHalt]);
   useEffect(() => { newsHaltedAssetsRef.current = newsHaltedAssets; }, [newsHaltedAssets]);
+  useEffect(() => { apiLoadStateRef.current = apiLoadState; }, [apiLoadState]);
+  useEffect(() => { apiQueueCountRef.current = apiQueueCount; }, [apiQueueCount]);
 
   useEffect(() => { maxStealthStopLossRef.current = maxStealthStopLoss; }, [maxStealthStopLoss]);
   useEffect(() => { hedgingActiveRef.current = hedgingActive; }, [hedgingActive]);
@@ -240,17 +230,11 @@ export default function Dashboard() {
       const data = JSON.parse(saved);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setRealizedProfit(data.realizedProfit || 0);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDailyProfit(data.dailyProfit || 0);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTotalCommissions(data.totalCommissions || 0);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTotalSlippage(data.totalSlippage || 0);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClosedTradesCount(data.closedTradesCount || 0);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTradeHistory(data.tradeHistory || []);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGreenDaysStreak(data.greenDaysStreak || 0);
     }
     // Pre-load audio
@@ -274,6 +258,73 @@ export default function Dashboard() {
     }
   }, []);
 
+  // API Rate Shield queue manager
+  const queueRequest = useCallback((action: () => void, description: string) => {
+    if (apiLoadStateRef.current === "COOLDOWN") {
+      console.warn(`[API Rate Shield] Cooldown active. Dropped or delayed request: ${description}`);
+      return;
+    }
+
+    executionQueueRef.current.push({
+      id: Math.random(),
+      action,
+      description
+    });
+
+    const newLen = executionQueueRef.current.length;
+    setApiQueueCount(newLen);
+    apiQueueCountRef.current = newLen;
+
+    // Simulated overflow: if too many orders are fragmented at once (e.g. > 10 items in queue)
+    if (newLen > 10) {
+      console.error("[API Rate Shield] RATE LIMIT EXCEEDED (HTTP 429). Entering 5-second Cooldown.");
+      setApiLoadState("COOLDOWN");
+      apiLoadStateRef.current = "COOLDOWN";
+      executionQueueRef.current = [];
+      setApiQueueCount(0);
+      apiQueueCountRef.current = 0;
+
+      setTimeout(() => {
+        setApiLoadState("OK");
+        apiLoadStateRef.current = "OK";
+        console.log("[API Rate Shield] Cooldown finished. API ready.");
+      }, 5000);
+    } else if (apiLoadStateRef.current === "OK") {
+      setApiLoadState("QUEUED");
+      apiLoadStateRef.current = "QUEUED";
+    }
+  }, []);
+
+  // API Rate Shield queue execution loop (5 requests per second)
+  useEffect(() => {
+    if (apiLoadState === "COOLDOWN") return;
+
+    const interval = setInterval(() => {
+      if (executionQueueRef.current.length > 0) {
+        if (apiLoadStateRef.current !== "QUEUED") {
+          setApiLoadState("QUEUED");
+          apiLoadStateRef.current = "QUEUED";
+        }
+
+        const item = executionQueueRef.current.shift();
+        setApiQueueCount(executionQueueRef.current.length);
+        apiQueueCountRef.current = executionQueueRef.current.length;
+
+        if (item) {
+          console.log(`[API Rate Shield] Dispatching: ${item.description}`);
+          item.action();
+        }
+      } else {
+        if (apiLoadStateRef.current === "QUEUED") {
+          setApiLoadState("OK");
+          apiLoadStateRef.current = "OK";
+        }
+      }
+    }, 125);
+
+    return () => clearInterval(interval);
+  }, [apiLoadState]);
+
   const realizeProfitAction = useCallback((amount: number) => {
     const s_stealth = isStealth;
     const slippageMultiplier = s_stealth ? 0.5 : 1.0;
@@ -281,81 +332,109 @@ export default function Dashboard() {
     const slippage = Math.abs(amount * (Math.random() * 0.002) * slippageMultiplier); 
     const netAmount = amount - commission - slippage;
 
-    if (netAmount > 0) playCashSound();
-    
-    setTotalCommissions(prev => prev + commission);
-    setTotalSlippage(prev => prev + slippage);
-    setRealizedProfit(prev => prev + netAmount);
-    
-    setDailyProfit(prev => {
-      const newDaily = prev + netAmount;
-      if (newDaily <= DAILY_STOP_LOSS) {
-        setAutoHalted(true);
-        setIsPaused(true);
-        setIsAutotrade(false);
-        setProfit(0);
+    // Define execution block
+    const executeTradeExecution = (amt: number, comm: number, slip: number, isLastSlice: boolean, sliceIndex?: number, totalSlices?: number) => {
+      if (amt > 0 && isLastSlice) playCashSound();
+      
+      setTotalCommissions(prev => prev + comm);
+      setTotalSlippage(prev => prev + slip);
+      setRealizedProfit(prev => prev + amt);
+      
+      setDailyProfit(prev => {
+        const newDaily = prev + amt;
+        if (newDaily <= DAILY_STOP_LOSS) {
+          setAutoHalted(true);
+          setIsPaused(true);
+          setIsAutotrade(false);
+          setProfit(0);
+        }
+        if (newDaily >= DAILY_TARGET && prev < DAILY_TARGET) {
+          setGreenDaysStreak(s => s + 1);
+        }
+        return newDaily;
+      });
+
+      if (isLastSlice) {
+        setClosedTradesCount(prev => prev + 1);
+        setEfficiency(prev => Math.max(0, Math.min(100, prev - (amount < 0 ? 5 : 0) + (amount > 0 ? 1 : 0))));
+        setShowFlash(true);
+        setTimeout(() => setShowFlash(false), 500);
       }
-      if (newDaily >= DAILY_TARGET && prev < DAILY_TARGET) {
-        setGreenDaysStreak(s => s + 1);
+
+      setTradeHistory(prev => {
+        const fillType = sliceIndex !== undefined 
+          ? `Fill #${sliceIndex}/${totalSlices}` 
+          : (dailyProfitRef.current >= DAILY_TARGET ? 'Shield-Trade' : 'Safe-Trade');
+        
+        return [
+          { 
+            id: Math.random(), 
+            type: fillType, 
+            amount: amt, 
+            time: new Date().toLocaleTimeString(), 
+            fee: comm + slip,
+            stealth: s_stealth
+          },
+          ...prev.slice(0, 10)
+        ];
+      });
+
+      // Secure DB sync on last slice
+      if (isLastSlice) {
+        const priorityAssets = ["BTC", "SPX", "GOLD", "TSLA", "EURUSD", "NDX"];
+        const activeTradingAsset = priorityAssets.find(asset => !newsHaltedAssetsRef.current.includes(asset)) || "GOLD";
+
+        fetch('/api/trading/record-trade', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            asset: activeTradingAsset,
+            direction: netAmount >= 0 ? "BUY" : "SELL",
+            entry_price: 68500.00,
+            exit_price: 68500.00 + netAmount,
+            stop_loss: 68500.00 - 50.00,
+            take_profit: 68500.00 + 75.00,
+            profit_loss: netAmount,
+            slippage: commission + slippage
+          })
+        })
+        .then(res => res.json())
+        .then(data => {
+          console.log("DB Trade logged:", data);
+          if (data.success && !data.db_saved) {
+            setUnsavedLoss(prev => prev + netAmount);
+          }
+          checkCircuitBreaker();
+        })
+        .catch(err => {
+          console.error("DB logging failed:", err);
+          setUnsavedLoss(prev => prev + netAmount);
+          checkCircuitBreaker();
+        });
       }
-      return newDaily;
-    });
+    };
 
-    setClosedTradesCount(prev => prev + 1);
-    setEfficiency(prev => Math.max(0, Math.min(100, prev - (amount < 0 ? 5 : 0) + (amount > 0 ? 1 : 0))));
-    setShowFlash(true);
-    setTimeout(() => setShowFlash(false), 500);
-    
-    setTradeHistory(prev => [
-      { 
-        id: Math.random(), 
-        type: dailyProfitRef.current >= DAILY_TARGET ? 'Shield-Trade' : 'Safe-Trade', 
-        amount: netAmount, 
-        time: new Date().toLocaleTimeString(), 
-        fee: commission + slippage,
-        stealth: s_stealth
-      },
-      ...prev.slice(0, 10)
-    ]);
+    if (s_stealth) {
+      // Split into 5 slices to demonstrate order execution queue
+      const numSlices = 5;
+      const sliceAmt = netAmount / numSlices;
+      const sliceComm = commission / numSlices;
+      const sliceSlip = slippage / numSlices;
 
-    // News Shield Asset Isolation: Find the first priority asset that is not news-halted
-    const priorityAssets = ["BTC", "SPX", "GOLD", "TSLA", "EURUSD", "NDX"];
-    const activeTradingAsset = priorityAssets.find(asset => !newsHaltedAssetsRef.current.includes(asset)) || "GOLD";
-
-    // Secure server-side DB recording (Supabase) via Next.js API route
-    fetch('/api/trading/record-trade', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        asset: activeTradingAsset,
-        direction: netAmount >= 0 ? "BUY" : "SELL",
-        entry_price: 68500.00,
-        exit_price: 68500.00 + netAmount,
-        stop_loss: 68500.00 - 50.00,
-        take_profit: 68500.00 + 75.00,
-        profit_loss: netAmount,
-        slippage: commission + slippage
-      })
-    })
-    .then(res => res.json())
-    .then(data => {
-      console.log("DB Trade logged:", data);
-      if (data.success && !data.db_saved) {
-        // Accumulate unsaved loss/profit locally in client memory if DB insertion fell back
-        setUnsavedLoss(prev => prev + netAmount);
+      for (let i = 1; i <= numSlices; i++) {
+        const isLast = i === numSlices;
+        queueRequest(() => {
+          executeTradeExecution(sliceAmt, sliceComm, sliceSlip, isLast, i, numSlices);
+        }, `Stealth Fill #${i} for ${(sliceAmt).toFixed(2)} EUR`);
       }
-      checkCircuitBreaker();
-    })
-    .catch(err => {
-      console.error("DB logging failed:", err);
-      // Accumulate as unsaved loss in client memory on fetch crash
-      setUnsavedLoss(prev => prev + netAmount);
-      checkCircuitBreaker();
-    });
+    } else {
+      // Direct execution
+      executeTradeExecution(netAmount, commission, slippage, true);
+    }
 
-  }, [playCashSound, isStealth, checkCircuitBreaker]);
+  }, [playCashSound, isStealth, checkCircuitBreaker, queueRequest]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -485,7 +564,6 @@ export default function Dashboard() {
           } else {
             // Check Stop-Loss (Stealth max 3% vs Public max 5%)
             // Calculate equivalent cash SL based on our strict 1% total risk limit
-            const stealthSLPercent = maxStealthStopLossRef.current; 
             const baseStopLossAmount = -(INITIAL_BALANCE * (0.5 * riskScale / 100)); // base -25 EUR SL
             
             let activeStopLoss = baseStopLossAmount;
@@ -806,6 +884,22 @@ export default function Dashboard() {
                 <span>{bypassEodHalt ? "Halt Bypassed" : "Bypass EOD Halt"}</span>
               </button>
             )}
+
+            {/* Premium API Rate Shield Widget */}
+            <div className={`flex items-center gap-3 px-5 py-2 rounded-full border backdrop-blur-md transition-all duration-500 text-[10px] font-black uppercase tracking-widest ${
+              apiLoadState === "OK" ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.05)]" :
+              apiLoadState === "QUEUED" ? "bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse" :
+              "bg-red-500/20 border-red-500/40 text-red-500 animate-bounce shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+            }`}>
+              <Cpu size={14} className={apiLoadState === "QUEUED" ? "animate-spin" : apiLoadState === "COOLDOWN" ? "animate-pulse text-red-500" : "text-emerald-400"} />
+              <div className="flex items-center gap-1.5">
+                <span>API Gateway:</span>
+                <span className={apiLoadState === "COOLDOWN" ? "font-black" : ""}>
+                  {apiLoadState === "OK" ? "OK" : apiLoadState === "QUEUED" ? `QUEUED (${apiQueueCount})` : "COOLDOWN"}
+                </span>
+              </div>
+            </div>
+
             <button onClick={togglePanic} className={`flex items-center gap-3 px-6 py-2 rounded-full border-2 transition-all text-[11px] font-black uppercase tracking-[0.2em] ${isPanic || autoHalted ? "bg-red-600 border-red-400 text-white animate-pulse shadow-2xl shadow-red-600/40" : recoveryMode ? "bg-blue-600 border-blue-500 text-white animate-pulse shadow-2xl shadow-blue-600/30" : "bg-red-600/10 border-red-600/30 text-red-400 hover:bg-red-600 hover:text-white"}`}>
               {isPanic || autoHalted ? <ShieldAlert size={18} /> : <Zap size={18} />}
               <span>{isPanic || autoHalted ? 'Resume' : 'Panic Stop'}</span>
@@ -1335,18 +1429,19 @@ function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalt
   );
 }
 
-function ReportCard({ label, value, sub, icon }: { label: string, value: string, sub: string, icon: React.ReactNode }) {
-  return (
-    <div className="p-8 rounded-[2.5rem] bg-[#0d0d0f] border border-white/5 shadow-xl space-y-4">
-       <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center">{icon}</div>
-       <div>
-          <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest italic">{label}</p>
-          <p className="text-3xl font-black text-white tracking-tighter">{value}</p>
-          <p className="text-[9px] text-gray-700 font-black uppercase tracking-widest">{sub}</p>
-       </div>
-    </div>
-  );
-}
+// Unused ReportCard component commented out to satisfy ESLint
+// function ReportCard({ label, value, sub, icon }: { label: string, value: string, sub: string, icon: React.ReactNode }) {
+//   return (
+//     <div className="p-8 rounded-[2.5rem] bg-[#0d0d0f] border border-white/5 shadow-xl space-y-4">
+//        <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center">{icon}</div>
+//        <div>
+//           <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest italic">{label}</p>
+//           <p className="text-3xl font-black text-white tracking-tighter">{value}</p>
+//           <p className="text-[9px] text-gray-700 font-black uppercase tracking-widest">{sub}</p>
+//        </div>
+//     </div>
+//   );
+// }
 
 function SummaryLine({ label, value }: { label: string, value: string }) {
   return (
