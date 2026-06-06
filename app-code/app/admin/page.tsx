@@ -107,9 +107,9 @@ export default function Dashboard() {
   const [tslaChange, setTslaChange] = useState(2.1);
   const [tslaSentiment, setTslaSentiment] = useState(72);
 
-  const [spxPrice, setSpxPrice] = useState(5120.25);
-  const [spxChange, setSpxChange] = useState(0.4);
-  const [spxSentiment, setSpxSentiment] = useState(65);
+  const [spusPrice, setSpusPrice] = useState(5120.25);
+  const [spusChange, setSpusChange] = useState(0.4);
+  const [spusSentiment, setSpusSentiment] = useState(65);
 
   const [oilPrice, setOilPrice] = useState(82.45);
   const [oilChange, setOilChange] = useState(-1.2);
@@ -381,7 +381,7 @@ export default function Dashboard() {
 
       // Secure DB sync on last slice
       if (isLastSlice) {
-        const priorityAssets = ["BTC", "SPX", "GOLD", "TSLA", "EURUSD", "NDX"];
+        const priorityAssets = ["BTC", "SPUS", "GOLD", "TSLA", "EURUSD", "NDX"];
         const activeTradingAsset = priorityAssets.find(asset => !newsHaltedAssetsRef.current.includes(asset)) || "GOLD";
 
         fetch('/api/trading/record-trade', {
@@ -651,12 +651,12 @@ export default function Dashboard() {
       setTslaChange(prev => Number((prev + (Math.random() - 0.5) * 0.08).toFixed(2)));
       setTslaSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 4))));
 
-      setSpxPrice(prev => {
+      setSpusPrice(prev => {
         const delta = (Math.random() - 0.5) * 2.0;
         return Number(Math.max(5000, Math.min(5300, prev + delta)).toFixed(2));
       });
-      setSpxChange(prev => Number((prev + (Math.random() - 0.5) * 0.02).toFixed(2)));
-      setSpxSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 2))));
+      setSpusChange(prev => Number((prev + (Math.random() - 0.5) * 0.02).toFixed(2)));
+      setSpusSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 2))));
 
       setOilPrice(prev => {
         const delta = (Math.random() - 0.5) * 0.15;
@@ -682,7 +682,7 @@ export default function Dashboard() {
       // 2. News Shield Event simulation (randomly 3% chance every tick)
       if (Math.random() > 0.97) {
         const newsEvents = [
-          { title: "⚠️ FED MEETING: Interest rate announcement pending. News Shield activated for BTC & SPX.", assets: ["BTC", "SPX"], type: "USD/FED" },
+          { title: "⚠️ FED MEETING: Interest rate announcement pending. News Shield activated for BTC & SPUS.", assets: ["BTC", "SPUS"], type: "USD/FED" },
           { title: "⚠️ OPEC EXTRAORDINARY SESSION: Crude supply quota adjustments. News Shield activated for GOLD & Crude Oil.", assets: ["GOLD", "WTI Crude Oil"], type: "OPEC" },
           { title: "⚠️ TSLA EARNINGS RELEASE: Q1 Net Profits statement. News Shield activated for TSLA.", assets: ["TSLA"], type: "EARNINGS" },
           { title: "⚠️ ECB INTEREST RATE DECISION: European Central Bank policy shift. News Shield activated for EURUSD.", assets: ["EURUSD"], type: "EUR/ECB" },
@@ -701,7 +701,7 @@ export default function Dashboard() {
       }
 
       if (Math.random() > 0.96) {
-        const assets = ["BTC", "ETH", "GOLD", "TSLA", "SPX", "EURUSD", "NDX"];
+        const assets = ["BTC", "ETH", "GOLD", "TSLA", "SPUS", "EURUSD", "NDX"];
         const asset = assets[Math.floor(Math.random() * assets.length)];
         setWhaleAlert({ asset, amount: `$${(Math.random() * 50 + 10).toFixed(1)}M` });
         setTimeout(() => setWhaleAlert(null), 4000);
@@ -1029,7 +1029,7 @@ export default function Dashboard() {
                                   <span className="font-bold text-white uppercase text-[10px]">2008 Lehman Collapse</span>
                                   <span className="text-emerald-400 font-bold">-5.8% Max DD</span>
                                </div>
-                               <p className="text-gray-500 text-[10px] leading-relaxed">S&P 500 crashed 40%. News Shield automatically halted TSLA, SPX, NDX, preserving portfolio core in Gold.</p>
+                               <p className="text-gray-500 text-[10px] leading-relaxed">S&P 500 crashed 40%. News Shield automatically halted TSLA, SPUS, NDX, preserving portfolio core in Gold.</p>
                             </div>
                             <div className="border-b border-white/5 pb-3">
                                <div className="flex justify-between items-center mb-1">
@@ -1079,7 +1079,7 @@ export default function Dashboard() {
                             {[
                                { year: '2026', start: '500k', end: '500k', cash: '375,000 EUR', ret: '+150% (5m)', desc: 'Transition to Supabase API & Frankfurt node integration', tag: 'ACTIVE' },
                                { year: '2025', start: '500k', end: '500k', cash: '900,000 EUR', ret: '+180%', desc: 'SafeTrade Engine v9 core integration', tag: 'SECURE' },
-                               { year: '2024', start: '500k', end: '500k', cash: '900,000 EUR', ret: '+180%', desc: 'SPX & NDX indexes reach peak performance', tag: 'SECURE' },
+                               { year: '2024', start: '500k', end: '500k', cash: '900,000 EUR', ret: '+180%', desc: 'SPUS & NDX indexes reach peak performance', tag: 'SECURE' },
                                { year: '2023', start: '500k', end: '500k', cash: '900,000 EUR', ret: '+180%', desc: 'Severe inflation hedge: robust Gold long cycle active', tag: 'SECURE' },
                                { year: '2022', start: '500k', end: '500k', cash: '900,000 EUR', ret: '+180%', desc: 'Tech Bear Market (NDX -33%). Auto-hedges active', tag: 'HEDGED' },
                                { year: '2021', start: '500k', end: '500k', cash: '1,080,000 EUR', ret: '+216%', desc: 'Crypto peak expansion (ETH & BTC liquidity capture)', tag: 'SECURE' },
@@ -1309,7 +1309,7 @@ export default function Dashboard() {
                    <WhaleBox asset="GOLD" amount="$45.2M" status="BULLISH" color="text-emerald-400" icon={<Gem size={20} className="text-yellow-500" />} />
                    <WhaleBox asset="TSLA" amount="$12.8M" status="LIQUIDITY" color="text-red-400" icon={<Zap size={20} className="text-red-500" />} />
                    <WhaleBox asset="EURUSD" amount="$120M" status="ACCUM." color="text-blue-400" icon={<Globe size={20} className="text-emerald-500" />} />
-                   <WhaleBox asset="SPX" amount="$240M" status="INST. BUY" color="text-emerald-400" icon={<BarChart3 size={20} className="text-blue-500" />} />
+                   <WhaleBox asset="SPUS" amount="$240M" status="INST. BUY" color="text-emerald-400" icon={<BarChart3 size={20} className="text-blue-500" />} />
                    <WhaleBox asset="BTC" amount="$8.4M" status="SWEEP" color="text-emerald-400" icon={<Activity size={20} className="text-emerald-500" />} />
                 </div>
               </section>
@@ -1338,12 +1338,12 @@ export default function Dashboard() {
                       isNewsHalted={newsHaltedAssets.includes("TSLA")} 
                     />
                     <BigIntelligenceCard 
-                      label="S&P 500 Index" 
-                      value={spxPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
-                      change={(spxChange >= 0 ? '+' : '') + spxChange.toFixed(2) + '%'} 
-                      sentiment={spxSentiment} 
+                      label="S&P 500 Shariah" 
+                      value={spusPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
+                      change={(spusChange >= 0 ? '+' : '') + spusChange.toFixed(2) + '%'} 
+                      sentiment={spusSentiment} 
                       icon={<BarChart3 size={32} className="text-blue-400" />} 
-                      isNewsHalted={newsHaltedAssets.includes("SPX")} 
+                      isNewsHalted={newsHaltedAssets.includes("SPUS")} 
                     />
                     <BigIntelligenceCard 
                       label="Crude Oil WTI" 

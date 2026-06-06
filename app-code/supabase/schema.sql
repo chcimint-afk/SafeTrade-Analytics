@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS trades (
     id BIGSERIAL PRIMARY KEY,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-    asset TEXT NOT NULL,          -- АКТИВ (BTC, GOLD, TSLA, SPX, WTI)
+    asset TEXT NOT NULL,          -- АКТИВ (BTC, GOLD, TSLA, SPUS, WTI)
     direction TEXT NOT NULL,      -- НАПРАВЛЕНИЕ (BUY/SELL)
     entry_price NUMERIC NOT NULL,
     exit_price NUMERIC,

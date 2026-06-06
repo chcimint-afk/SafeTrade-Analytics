@@ -50,7 +50,7 @@ graph TD
 | :--- | :--- | :--- |
 | `id` | `UUID` (Primary Key) | Уникальный идентификатор сделки. |
 | `user_id` | `UUID` (Foreign Key) | Связь с таблицей `users` для разграничения прав доступа. |
-| `asset` | `VARCHAR` | Торговый инструмент (например, `BTC`, `ETH`, `SPX`, `GOLD`). |
+| `asset` | `VARCHAR` | Торговый инструмент (например, `BTC`, `ETH`, `SPUS`, `GOLD`). |
 | `direction` | `VARCHAR` | Направление сделки (`BUY` / `SELL`). |
 | `entry_price` | `NUMERIC` | Цена входа в сделку. |
 | `exit_price` | `NUMERIC` | Цена выхода из сделки. |
