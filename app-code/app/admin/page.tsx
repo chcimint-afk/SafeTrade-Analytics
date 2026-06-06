@@ -619,8 +619,8 @@ export default function Dashboard() {
         if (remainingLossLimitPercent < 0.25) {
           scalpRiskScale = Math.max(0.1, remainingLossLimitPercent / 0.25);
         }
-        const scalpTarget = 12.0 * scalpRiskScale; 
-        const scalpSL = -8.0 * scalpRiskScale; 
+        const scalpSL = -(INITIAL_BALANCE * (0.25 / 100)) * scalpRiskScale; 
+        const scalpTarget = (INITIAL_BALANCE * (0.375 / 100)) * scalpRiskScale; 
         const change = (Math.random() - 0.40) * 6 * scalpRiskScale;
         currentScalpProfit += change;
 
