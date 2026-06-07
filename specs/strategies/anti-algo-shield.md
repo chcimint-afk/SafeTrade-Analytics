@@ -24,9 +24,9 @@ Standard stop-losses are visible in the exchange order book, making them targets
 To maximize safety and execution precision:
 - **Spread Filter**: The system blocks new entries if the current bid-ask spread expands beyond 1.5x the rolling daily average, avoiding instant entry friction.
 - **Momentum Scalping Filter**: After reaching the daily profit target of **1.0% of the account deposit**, the system shifts to a low-exposure, high-frequency execution model:
-  - Captures micro-impulses (0.25% - 0.5% net profit) triggered by institutional transaction flow.
-  - Utilizes tight 0.3% - 0.5% Stealth Stop-Losses, keeping execution times under 3 minutes.
-  - Reduces execution size by 50% under the *Profit Shield* protocol.
+  * Captures micro-impulses (0.45% - 0.75% net profit) triggered by institutional transaction flow.
+  * Utilizes tight 0.25% Stealth Stop-Losses, keeping execution times under 3 minutes.
+  * Reduces execution size by 50% under the *Profit Shield* protocol.
 
 ## 4. Institutional Threat Detection (Algo Activity Monitor)
 The system analyzes real-time price action to identify the "Fingerprint" of institutional algorithms:
