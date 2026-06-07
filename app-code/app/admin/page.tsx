@@ -1722,33 +1722,34 @@ function WhaleBox({ asset, amount, status, color, icon }: { asset: string, amoun
 function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalted }: { label: string, value: string, change: string, sentiment: number, icon: React.ReactNode, isNewsHalted?: boolean }) {
   const isPositive = change.startsWith('+');
   return (
-    <div className={`p-5 rounded-[2rem] bg-[#0d0d0f] border space-y-3 hover:border-emerald-500/20 transition-all shadow-xl group relative overflow-hidden ${isNewsHalted ? 'border-red-500/30 bg-red-950/5 shadow-[0_0_30px_rgba(239,68,68,0.02)]' : 'border-white/5'}`}>
+    <div className={`p-4 rounded-[2rem] bg-[#0d0d0f] border hover:border-emerald-500/20 transition-all shadow-xl group relative ${isNewsHalted ? 'border-red-500/30 bg-red-950/5' : 'border-white/5'}`}>
       {isNewsHalted && (
-        <div className="absolute top-0 right-0 bg-red-600 text-white text-[8px] font-black tracking-widest px-3 py-1 rounded-bl-xl uppercase animate-pulse z-10">
-          News Halt
+        <div className="absolute top-0 right-0 bg-red-600 text-white text-[7px] font-black tracking-widest px-2 py-0.5 rounded-bl-xl uppercase animate-pulse z-10">
+          Halt
         </div>
       )}
-      {/* Row 1: icon (small) + label on left, change badge on right */}
-      <div className="flex items-center justify-between gap-1">
+      {/* Row 1: icon + label | change badge */}
+      <div className="flex items-center justify-between gap-1 mb-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <div className="shrink-0 opacity-80">{/* icon placeholder scaled down via CSS */}
-            <div style={{ transform: 'scale(0.6)', transformOrigin: 'left center', display: 'inline-flex' }}>{icon}</div>
+          <div className="shrink-0 text-gray-500" style={{ fontSize: 0, lineHeight: 0 }}>
+            {/* render icon at 55% scale */}
+            <span style={{ display: 'inline-flex', transform: 'scale(0.55)', transformOrigin: 'left center', width: 20, height: 20 }}>{icon}</span>
           </div>
-          <span className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-400 truncate">{label}</span>
+          <span className="text-[8px] font-black uppercase tracking-[0.12em] text-gray-500 leading-none" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 72 }}>{label}</span>
         </div>
-        <span className={`shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>
+        <span className={`shrink-0 text-[7px] font-black px-1.5 py-0.5 rounded-full leading-none ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>
       </div>
-      {/* Row 2: price number — full width, no icon competition */}
-      <p className="text-3xl font-black text-white tracking-tighter leading-none w-full overflow-hidden" style={{ fontSize: 'clamp(1.1rem, 2vw, 1.875rem)' }}>{value}</p>
-      {/* Row 3: Market Pulse sentiment bar */}
-      <div className="space-y-1.5 pt-1 border-t border-white/[0.02]">
-         <div className="flex justify-between text-[9px] font-black uppercase tracking-[0.2em] text-gray-600">
-            <span className="italic group-hover:text-blue-400 transition-colors">Market Pulse</span>
-            <span className={sentiment > 50 ? 'text-emerald-500' : 'text-red-500'}>{sentiment}%</span>
-         </div>
-         <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-           <div className={`h-full transition-all duration-1000 ${sentiment > 50 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${sentiment}%` }} />
-         </div>
+      {/* Row 2: price — full card width, fixed text-xl, never clips */}
+      <p className="text-xl font-black text-white tracking-tighter leading-none mb-2">{value}</p>
+      {/* Row 3: sentiment bar */}
+      <div className="pt-2 border-t border-white/[0.02] space-y-1">
+        <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-gray-600">
+          <span className="italic group-hover:text-blue-400 transition-colors">Pulse</span>
+          <span className={sentiment > 50 ? 'text-emerald-500' : 'text-red-500'}>{sentiment}%</span>
+        </div>
+        <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+          <div className={`h-full transition-all duration-1000 ${sentiment > 50 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${sentiment}%` }} />
+        </div>
       </div>
     </div>
   );
