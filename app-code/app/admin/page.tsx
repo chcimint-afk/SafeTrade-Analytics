@@ -40,8 +40,6 @@ const NEWS_HALT_DURATION = TERMINAL_ENV === "development" ? 8 : 900;
 
 const INITIAL_BALANCE = 5000;
 const DAILY_RISK_PERCENT = 1.0; // Dynamic daily risk percent (1.0% limit)
-const DAILY_STOP_LOSS = -(INITIAL_BALANCE * (DAILY_RISK_PERCENT / 100)); // Dynamic daily stop-loss limit
-const DAILY_TARGET = INITIAL_BALANCE * (DAILY_RISK_PERCENT / 100); // Dynamic daily target
 const BASE_SENTIMENT_THRESHOLD = 75; 
 const PROFIT_SHIELD_THRESHOLD = 80;
 
@@ -55,7 +53,7 @@ export default function Dashboard() {
   };
 
   const [profit, setProfit] = useState(0.00);
-  const [_pulse, setPulse] = useState(true);
+  const [, setPulse] = useState(true);
   const [realizedProfit, setRealizedProfit] = useState(0.00);
   const [dailyProfit, setDailyProfit] = useState(0.00);
   const [totalCommissions, setTotalCommissions] = useState(0.00);
@@ -83,6 +81,13 @@ export default function Dashboard() {
   const [activeNewsEvent, setActiveNewsEvent] = useState<{ title: string, assetType: string } | null>(null);
   const [newsCountdown, setNewsCountdown] = useState<number>(0);
   const [unsavedLoss, setUnsavedLoss] = useState(0.00);
+
+  // Dynamic compounding calculations calculated on every render
+  const dailyStartingBalance = INITIAL_BALANCE + realizedProfit - dailyProfit;
+  const displayTarget = dailyStartingBalance * (DAILY_RISK_PERCENT / 100);
+
+  const realizedProfitRef = useRef(0.00);
+  useEffect(() => { realizedProfitRef.current = realizedProfit; }, [realizedProfit]);
   const unsavedLossRef = useRef(0.00);
   useEffect(() => { unsavedLossRef.current = unsavedLoss; }, [unsavedLoss]);
 
@@ -99,10 +104,11 @@ export default function Dashboard() {
   const [hedgeActive, setHedgeActive] = useState(false);
   const [hedgeProfit, setHedgeProfit] = useState(0.0);
 
-  // Slippage Feedback Loop & Bounded Balance
   const [averageSlippagePips, setAverageSlippagePips] = useState(0.15);
   const [scalpVirtualBalanceCap, setScalpVirtualBalanceCap] = useState(150000);
   const [scalperSleepMode, setScalperSleepMode] = useState(false);
+  const isStealthRef = useRef(isStealth);
+  useEffect(() => { isStealthRef.current = isStealth; }, [isStealth]);
   
   // Real-time Macro Assets States for absolute alive feel
   const [goldPrice, setGoldPrice] = useState(2345.50);
@@ -142,6 +148,8 @@ export default function Dashboard() {
   const apiLoadStateRef = useRef<"OK" | "QUEUED" | "COOLDOWN">("OK");
   const apiQueueCountRef = useRef(0);
   const executionQueueRef = useRef<{ id: number; action: () => void; description: string }[]>([]);
+  const threatLevelRef = useRef(threatLevel);
+  useEffect(() => { threatLevelRef.current = threatLevel; }, [threatLevel]);
   
   // Parallel Hybrid Trading System Refs
   const maxStealthStopLossRef = useRef(3.0);
@@ -204,7 +212,9 @@ export default function Dashboard() {
           if (data.db_status === "offline") {
             // DB is offline, check client-side simulated dailyProfit + local unsaved loss
             const combinedDailyLoss = dailyProfitRef.current + unsavedLossRef.current;
-            const isTriggered = combinedDailyLoss <= DAILY_STOP_LOSS;
+            const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
+            const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
+            const isTriggered = combinedDailyLoss <= dynamicStopLoss;
             if (isTriggered) {
               setAutoHalted(true);
               setIsPaused(true);
@@ -214,7 +224,9 @@ export default function Dashboard() {
           } else {
             // DB is online, combine DB profit/loss with local unsaved loss for absolute safety
             const combinedDailyLoss = Number(data.daily_profit_loss || 0) + unsavedLossRef.current;
-            const limit = Number(data.daily_loss_limit || DAILY_STOP_LOSS);
+            const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - Number(data.daily_profit_loss || 0);
+            const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
+            const limit = Number(data.daily_loss_limit || dynamicStopLoss);
             const isTriggered = combinedDailyLoss <= limit || data.circuit_breaker_active;
             if (isTriggered) {
               setAutoHalted(true);
@@ -229,7 +241,9 @@ export default function Dashboard() {
         console.error("Error checking circuit breaker:", err);
         // Fallback to client-side check on request failure
         const combinedDailyLoss = dailyProfitRef.current + unsavedLossRef.current;
-        const isTriggered = combinedDailyLoss <= DAILY_STOP_LOSS;
+        const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
+        const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
+        const isTriggered = combinedDailyLoss <= dynamicStopLoss;
         if (isTriggered) {
           setAutoHalted(true);
           setIsPaused(true);
@@ -338,15 +352,15 @@ export default function Dashboard() {
   }, [apiLoadState]);
 
   const realizeProfitAction = useCallback((amount: number) => {
-    const s_stealth = isStealth;
+    const s_stealth = isStealthRef.current;
     const slippageMultiplier = s_stealth ? 0.5 : 1.0;
     const commission = Math.abs(amount * 0.001); 
     const slippage = Math.abs(amount * (Math.random() * 0.002) * slippageMultiplier); 
     const netAmount = amount - commission - slippage;
 
     // Slippage feedback loop (pips calculation)
-    const threatMultiplier = threatLevel === "High" ? 2.5 : threatLevel === "Medium" ? 1.5 : 1.0;
-    const newPipSlippage = (Math.random() * 0.3) * threatMultiplier * slippageMultiplier;
+    const threatMultiplier = threatLevelRef.current === "High" ? 2.5 : threatLevelRef.current === "Medium" ? 1.5 : 1.0;
+    const newPipSlippage = (Math.random() * 0.9) * threatMultiplier * slippageMultiplier;
     const newHistory = [...slippageHistoryRef.current, newPipSlippage].slice(-10);
     slippageHistoryRef.current = newHistory;
     const avgSlippage = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
@@ -378,15 +392,23 @@ export default function Dashboard() {
       setTotalSlippage(prev => prev + slip);
       setRealizedProfit(prev => prev + amt);
       
+      const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
+      const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
+      const dynamicTarget = currentStartingBalance * (DAILY_RISK_PERCENT / 100);
+
       setDailyProfit(prev => {
         const newDaily = prev + amt;
-        if (newDaily <= DAILY_STOP_LOSS) {
+        dailyProfitRef.current = newDaily;
+        if (newDaily <= dynamicStopLoss) {
           setAutoHalted(true);
+          autoHaltedRef.current = true;
           setIsPaused(true);
+          isPausedRef.current = true;
           setIsAutotrade(false);
+          isAutotradeRef.current = false;
           setProfit(0);
         }
-        if (newDaily >= DAILY_TARGET && prev < DAILY_TARGET) {
+        if (newDaily >= dynamicTarget && prev < dynamicTarget) {
           setGreenDaysStreak(s => s + 1);
         }
         return newDaily;
@@ -402,7 +424,7 @@ export default function Dashboard() {
       setTradeHistory(prev => {
         const fillType = sliceIndex !== undefined 
           ? `Fill #${sliceIndex}/${totalSlices}` 
-          : (dailyProfitRef.current >= DAILY_TARGET ? 'Shield-Trade' : 'Safe-Trade');
+          : (dailyProfitRef.current >= dynamicTarget ? 'Shield-Trade' : 'Safe-Trade');
         
         return [
           { 
@@ -422,6 +444,29 @@ export default function Dashboard() {
         const priorityAssets = ["BTC", "SPUS", "GOLD", "TSLA", "EURUSD", "NDX"];
         const activeTradingAsset = priorityAssets.find(asset => !newsHaltedAssetsRef.current.includes(asset)) || "GOLD";
 
+        const getAssetPrice = (assetName: string) => {
+          switch (assetName) {
+            case "GOLD": return goldPrice;
+            case "TSLA": return tslaPrice;
+            case "SPUS": return spusPrice;
+            case "EURUSD": return eurusdPrice;
+            case "NDX": return ndxPrice;
+            case "BTC": return 68500.00;
+            default: return 1.0;
+          }
+        };
+
+        const entryPrice = getAssetPrice(activeTradingAsset);
+        const pctChange = netAmount / currentStartingBalance;
+        const exitPrice = entryPrice * (1 + pctChange);
+        const directionStr = netAmount >= 0 ? "BUY" : "SELL";
+        const isScalpFill = sliceIndex !== undefined;
+        const slPercent = isScalpFill ? 0.0025 : 0.01;
+        const tpPercent = isScalpFill ? 0.00375 : 0.03;
+        
+        const stopLossVal = directionStr === "BUY" ? entryPrice * (1 - slPercent) : entryPrice * (1 + slPercent);
+        const takeProfitVal = directionStr === "BUY" ? entryPrice * (1 + tpPercent) : entryPrice * (1 - tpPercent);
+
         fetch('/api/trading/record-trade', {
           method: 'POST',
           headers: {
@@ -429,11 +474,11 @@ export default function Dashboard() {
           },
           body: JSON.stringify({
             asset: activeTradingAsset,
-            direction: netAmount >= 0 ? "BUY" : "SELL",
-            entry_price: 68500.00,
-            exit_price: 68500.00 + netAmount,
-            stop_loss: 68500.00 - 50.00,
-            take_profit: 68500.00 + 75.00,
+            direction: directionStr,
+            entry_price: entryPrice,
+            exit_price: exitPrice,
+            stop_loss: stopLossVal,
+            take_profit: takeProfitVal,
             profit_loss: netAmount,
             slippage: commission + slippage
           })
@@ -449,30 +494,27 @@ export default function Dashboard() {
         .catch(err => {
           console.error("DB logging failed:", err);
           setUnsavedLoss(prev => prev + netAmount);
-          checkCircuitBreaker();
         });
       }
     };
 
-    if (s_stealth) {
-      // Split into 5 slices to demonstrate order execution queue
+    if (s_stealth && amount !== 0) {
+      // Split execution into 5 smaller slices with random execution times
       const numSlices = 5;
       const sliceAmt = netAmount / numSlices;
       const sliceComm = commission / numSlices;
       const sliceSlip = slippage / numSlices;
 
       for (let i = 1; i <= numSlices; i++) {
-        const isLast = i === numSlices;
-        queueRequest(() => {
-          executeTradeExecution(sliceAmt, sliceComm, sliceSlip, isLast, i, numSlices);
-        }, `Stealth Fill #${i} for ${(sliceAmt).toFixed(2)} EUR`);
+        const delay = 1000 + Math.random() * 4000;
+        setTimeout(() => {
+          queueRequest(() => executeTradeExecution(sliceAmt, sliceComm, sliceSlip, i === numSlices, i, numSlices), `Stealth Slice ${i}/${numSlices}`);
+        }, delay);
       }
     } else {
-      // Direct execution
       executeTradeExecution(netAmount, commission, slippage, true);
     }
-
-  }, [playCashSound, isStealth, checkCircuitBreaker, queueRequest, threatLevel]);
+  }, [playCashSound, checkCircuitBreaker, queueRequest, goldPrice, tslaPrice, spusPrice, eurusdPrice, ndxPrice]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -561,6 +603,14 @@ export default function Dashboard() {
         // Reset daily stats for the new day
         setDailyProfit(0);
         dailyProfitRef.current = 0;
+
+        // Auto-resume from circuit breaker on a new trading session
+        setAutoHalted(false);
+        autoHaltedRef.current = false;
+        setIsPaused(false);
+        isPausedRef.current = false;
+        setIsAutotrade(true);
+        isAutotradeRef.current = true;
       }
 
       setMarketSentiment(prev => {
@@ -590,11 +640,14 @@ export default function Dashboard() {
 
       // --- PARALLEL HYBRID TRADING SIMULATION ---
       const btcNewsHalted = newsHaltedAssetsRef.current.includes("BTC");
-      const hasReachedTarget = dailyProfitRef.current >= DAILY_TARGET;
+      const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
+      const dailyStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
+      const dailyTarget = currentStartingBalance * (DAILY_RISK_PERCENT / 100);
+      const hasReachedTarget = dailyProfitRef.current >= dailyTarget;
       const requiredSentiment = hasReachedTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD;
 
       // Calculate remaining daily loss limit in percent of starting balance
-      const remainingLossLimitPercent = ((DAILY_STOP_LOSS - dailyProfitRef.current) / -INITIAL_BALANCE) * 100;
+      const remainingLossLimitPercent = ((dailyStopLoss - dailyProfitRef.current) / -currentStartingBalance) * 100;
 
       // Zone Flags
       const isTrendBlockedByLimit = remainingLossLimitPercent < 0.5;
@@ -607,7 +660,7 @@ export default function Dashboard() {
       if (!btcNewsHalted && isAutotradeRef.current) {
         if (!isTrendActive) {
           // Entry criteria for Trend (only if remaining daily limit is >= 0.5%)
-          if (!isTrendBlockedByLimit && sentimentRef.current >= requiredSentiment) {
+          if (!isTrendBlockedByLimit && sentimentRef.current >= requiredSentiment && !scalpActiveRef.current) {
             isTrendActive = true;
             currentTrendProfit = 0;
             trendBE = false;
@@ -623,7 +676,7 @@ export default function Dashboard() {
           if (remainingLossLimitPercent < 1.0) {
             trendRiskScale = Math.max(0.1, remainingLossLimitPercent);
           }
-          const targetProfitAmount = INITIAL_BALANCE * (3.0 * trendRiskScale / 100); // Trend TP target is +3% of balance
+          const targetProfitAmount = currentStartingBalance * (3.0 * trendRiskScale / 100); // Trend TP target is +3% of balance
           const change = (Math.random() - 0.45) * 4 * trendRiskScale;
           currentTrendProfit += change;
 
@@ -637,8 +690,8 @@ export default function Dashboard() {
           }
 
           // Trailing Stop calculations
-          const trailingActivateAmount = INITIAL_BALANCE * (2.0 * trendRiskScale / 100);
-          const trailingDistance = INITIAL_BALANCE * (0.5 * trendRiskScale / 100);
+          const trailingActivateAmount = currentStartingBalance * (2.0 * trendRiskScale / 100);
+          const trailingDistance = currentStartingBalance * (0.5 * trendRiskScale / 100);
           let isTrailingActive = false;
 
           if (maxTrendProfitRef.current >= trailingActivateAmount) {
@@ -660,7 +713,7 @@ export default function Dashboard() {
           } else {
             // Check Stop-Loss (Stealth max 3% vs Public max 5%)
             // Calculate equivalent cash SL based on our strict 1% total risk limit
-            const baseStopLossAmount = -(INITIAL_BALANCE * (1.0 * trendRiskScale / 100)); // base -1.0% SL (50 EUR)
+            const baseStopLossAmount = -(currentStartingBalance * (1.0 * trendRiskScale / 100)); // base -1.0% SL (50 EUR)
             
             let activeStopLoss = baseStopLossAmount;
             if (trendBE) {
@@ -713,7 +766,7 @@ export default function Dashboard() {
         }
         
         // Virtual Bounded Balance: scalp working balance is scaled by virtual balance cap ratio
-        const scalpWorkingBalance = INITIAL_BALANCE * (scalpVirtualBalanceCapRef.current / 150000);
+        const scalpWorkingBalance = Math.min(currentStartingBalance, 150000) * (scalpVirtualBalanceCapRef.current / 150000);
 
         const scalpSL = -(scalpWorkingBalance * (0.25 / 100)) * scalpRiskScale; 
         const scalpTarget = (scalpWorkingBalance * (0.375 / 100)) * scalpRiskScale; 
@@ -1034,13 +1087,13 @@ export default function Dashboard() {
             <h1 className="text-xl font-black uppercase tracking-tighter truncate italic text-white/80 shrink-0">Institutional Terminal</h1>
             <div className="hidden lg:flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
               <span className="flex items-center gap-3">
-                 <span className={`w-2.5 h-2.5 rounded-full shadow-[0_0_15px] ${marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'bg-emerald-500 shadow-emerald-500' : 'bg-yellow-500 shadow-yellow-500'}`} /> 
+                 <span className={`w-2.5 h-2.5 rounded-full shadow-[0_0_15px] ${marketSentiment >= (dailyProfit >= displayTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'bg-emerald-500 shadow-emerald-500' : 'bg-yellow-500 shadow-yellow-500'}`} /> 
                  Confidence: {marketSentiment.toFixed(0)}%
               </span>
               <div className="h-8 w-px bg-white/10" />
               <div className="flex items-center gap-3 text-white/60 font-black tracking-[0.4em] uppercase italic">
                  <Cpu size={18} className="text-blue-500" />
-                 <span>{marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'Ready' : 'Scanning'}</span>
+                 <span>{marketSentiment >= (dailyProfit >= displayTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'Ready' : 'Scanning'}</span>
               </div>
             </div>
           </div>
@@ -1306,7 +1359,7 @@ export default function Dashboard() {
               {/* Main Display */}
               <section className="grid grid-cols-1 xl:grid-cols-4 gap-8">
                 <div className={`xl:col-span-3 p-6 rounded-[2.5rem] border relative overflow-hidden transition-all duration-1000 ${isPanic || autoHalted ? 'bg-red-600/5 border-red-600/30' : (isEodHalted && !bypassEodHalt) ? 'bg-amber-950/20 border-amber-500/30 shadow-[0_0_50px_rgba(245,158,11,0.05)]' : recoveryMode ? 'bg-blue-600/10 border-blue-600/40' : 'bg-[#0d0d0f] border-white/10 shadow-2xl'}`}>
-                  <div className="absolute top-0 left-0 h-1 bg-blue-500 shadow-[0_0_20px_#3b82f6] transition-all duration-1000" style={{ width: `${Math.min(100, (dailyProfit / DAILY_TARGET) * 100)}%` }} />
+                  <div className="absolute top-0 left-0 h-1 bg-blue-500 shadow-[0_0_20px_#3b82f6] transition-all duration-1000" style={{ width: `${Math.min(100, (dailyProfit / displayTarget) * 100)}%` }} />
                   
                   <div className="relative z-10 space-y-6">
                     {isEodHalted && !bypassEodHalt && (
@@ -1339,10 +1392,10 @@ export default function Dashboard() {
                       <div>
                         <h2 className="text-xl font-black tracking-tighter uppercase italic text-white/10 select-none">SafeTrade Engine v9</h2>
                         <div className="flex items-center gap-3 mt-1">
-                           <span className={`px-2 py-0.5 rounded-full text-[8px] font-black tracking-[0.2em] uppercase ${marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'}`}>
-                              {marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (dailyProfit >= DAILY_TARGET ? 'Profit Shield Active' : 'Safe Protocol Active') : 'Market Scanning'}
+                           <span className={`px-2 py-0.5 rounded-full text-[8px] font-black tracking-[0.2em] uppercase ${marketSentiment >= (dailyProfit >= displayTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'}`}>
+                              {marketSentiment >= (dailyProfit >= displayTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (dailyProfit >= displayTarget ? 'Profit Shield Active' : 'Safe Protocol Active') : 'Market Scanning'}
                            </span>
-                           {dailyProfit >= DAILY_TARGET && (
+                           {dailyProfit >= displayTarget && (
                               <span className="px-2 py-0.5 rounded-full text-[8px] font-black tracking-[0.2em] uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
                                 🔒 Greed Lock Active
                               </span>
@@ -1357,7 +1410,7 @@ export default function Dashboard() {
                       <div className="flex gap-8">
                         <div className="text-right">
                           <p className="text-[9px] text-gray-500 uppercase font-black tracking-[0.3em] italic">Alpha Index</p>
-                          <p className={`text-3xl font-black tabular-nums tracking-tighter ${dailyProfit >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{((dailyProfit / DAILY_TARGET) * 10).toFixed(1)}</p>
+                          <p className={`text-3xl font-black tabular-nums tracking-tighter ${dailyProfit >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{((dailyProfit / displayTarget) * 10).toFixed(1)}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-[9px] text-gray-500 uppercase font-black tracking-[0.3em] italic">Live Float</p>
@@ -1388,15 +1441,15 @@ export default function Dashboard() {
                          <div className="bg-white/[0.02] p-4 rounded-[1.5rem] border border-white/5 flex flex-col justify-center items-center shadow-xl relative overflow-hidden group min-h-[140px]">
                             <div className="text-center space-y-1 relative z-10">
                                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-600 italic">Security Status</p>
-                               <p className={`text-lg font-black tracking-tight ${marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'text-blue-400' : 'text-white/40'}`}>
-                                  {marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (dailyProfit >= DAILY_TARGET ? 'GREED SHIELD READY' : 'READY') : 'SCANNING'}
+                               <p className={`text-lg font-black tracking-tight ${marketSentiment >= (dailyProfit >= displayTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? 'text-blue-400' : 'text-white/40'}`}>
+                                  {marketSentiment >= (dailyProfit >= displayTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (dailyProfit >= displayTarget ? 'GREED SHIELD READY' : 'READY') : 'SCANNING'}
                                </p>
-                               {dailyProfit >= DAILY_TARGET && (
+                               {dailyProfit >= displayTarget && (
                                   <p className="text-[8px] font-black text-amber-500 uppercase tracking-widest mt-1">Target Met: 80% Threshold Reqd</p>
                                )}
                             </div>
                             <div className="relative z-10 mt-2 scale-75">
-                               {marketSentiment >= (dailyProfit >= DAILY_TARGET ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (
+                               {marketSentiment >= (dailyProfit >= displayTarget ? PROFIT_SHIELD_THRESHOLD : BASE_SENTIMENT_THRESHOLD) ? (
                                   <ShieldEllipsis size={60} className="text-blue-500 animate-pulse drop-shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
                                ) : (
                                   <LockIcon size={60} className="text-gray-800 animate-pulse" />
