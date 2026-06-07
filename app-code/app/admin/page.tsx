@@ -1160,21 +1160,6 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            {isEodHalted && (
-              <button 
-                onClick={() => {
-                  const newVal = !bypassEodHalt;
-                  setBypassEodHalt(newVal);
-                  if (newVal) {
-                    setIsAutotrade(true);
-                  }
-                }} 
-                className={`flex items-center gap-3 px-6 py-2 rounded-full border-2 transition-all text-[11px] font-black uppercase tracking-[0.2em] ${bypassEodHalt ? "bg-amber-600 border-amber-400 text-white shadow-2xl shadow-amber-600/40" : "bg-amber-600/10 border-amber-600/30 text-amber-400 hover:bg-amber-600 hover:text-white"}`}
-              >
-                <Lock size={14} className={bypassEodHalt ? "" : "animate-pulse"} />
-                <span>{bypassEodHalt ? "Halt Bypassed" : "Bypass EOD Halt"}</span>
-              </button>
-            )}
 
             {/* Premium API Rate Shield Widget */}
             <div className={`flex items-center gap-3 px-5 py-2 rounded-full border backdrop-blur-md transition-all duration-500 text-[10px] font-black uppercase tracking-widest ${
@@ -1363,6 +1348,24 @@ export default function Dashboard() {
                             <SummaryLine label="Trade Commissions" value="0.1% Per Execution" />
                             <SummaryLine label="Math Model Validation" value="Proven (SafeTrade v9)" />
                             <SummaryLine label="Account Ruin Probability" value="0.0000%" />
+                            {/* Bypass EOD Halt — placed below Threat Level for visual harmony */}
+                          {isEodHalted && (
+                            <button
+                              onClick={() => {
+                                const newVal = !bypassEodHalt;
+                                setBypassEodHalt(newVal);
+                                if (newVal) setIsAutotrade(true);
+                              }}
+                              className={`w-full flex items-center justify-center gap-3 px-4 py-3 rounded-[1.5rem] border-2 transition-all text-[10px] font-black uppercase tracking-[0.2em] ${
+                                bypassEodHalt
+                                  ? "bg-amber-600 border-amber-400 text-white shadow-2xl shadow-amber-600/30"
+                                  : "bg-amber-600/10 border-amber-600/30 text-amber-400 hover:bg-amber-600/20"
+                              }`}
+                            >
+                              <Lock size={13} className={bypassEodHalt ? "" : "animate-pulse"} />
+                              <span>{bypassEodHalt ? "Halt Bypassed" : "Bypass EOD Halt"}</span>
+                            </button>
+                          )}
                          </div>
                       </div>
                    </div>
@@ -1728,9 +1731,9 @@ function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalt
         <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">{label}</span>
         <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-end gap-4">
          {icon}
-         <p className="text-3xl font-black text-white tracking-tighter">{value}</p>
+         <p className="text-3xl font-black text-white tracking-tighter leading-none">{value}</p>
       </div>
       <div className="space-y-2 pt-2 border-t border-white/[0.02]">
          <div className="flex justify-between text-[9px] font-black uppercase tracking-[0.2em] text-gray-600">
