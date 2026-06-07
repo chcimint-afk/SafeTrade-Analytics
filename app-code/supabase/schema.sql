@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     starting_balance NUMERIC DEFAULT 5000.00,
     current_balance NUMERIC DEFAULT 5000.00,
     compounding_status BOOLEAN DEFAULT TRUE,
-    daily_loss_limit NUMERIC DEFAULT -50.00, -- Лимит потерь (1% от стартового баланса)
+    daily_loss_limit NUMERIC DEFAULT -1.00, -- Лимит потерь (1% от стартового баланса)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS trades (
     id BIGSERIAL PRIMARY KEY,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-    asset TEXT NOT NULL,          -- АКТИВ (BTC, GOLD, TSLA, SPUS, WTI)
+    asset TEXT NOT NULL,          -- АКТИВ (BTC, ETH, GOLD, TSLA, SPUS, EURUSD, NDX)
     direction TEXT NOT NULL,      -- НАПРАВЛЕНИЕ (BUY/SELL)
     entry_price NUMERIC NOT NULL,
     exit_price NUMERIC,

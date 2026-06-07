@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/app/lib/supabase";
+import { createClient } from "@/utils/supabase/server";
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createClient();
     const body = await req.json();
     const {
       asset,
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
           starting_balance: 5000.00,
           current_balance: 5000.00,
           compounding_status: true,
-          daily_loss_limit: -50.00,
+          daily_loss_limit: -1.00,
         })
         .select()
         .single();

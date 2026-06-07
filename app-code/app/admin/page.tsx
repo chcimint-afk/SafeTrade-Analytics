@@ -123,10 +123,6 @@ export default function Dashboard() {
   const [spusChange, setSpusChange] = useState(0.4);
   const [spusSentiment, setSpusSentiment] = useState(65);
 
-  const [oilPrice, setOilPrice] = useState(82.45);
-  const [oilChange, setOilChange] = useState(-1.2);
-  const [oilSentiment, setOilSentiment] = useState(35);
-
   const [eurusdPrice, setEurusdPrice] = useState(1.0850);
   const [eurusdChange, setEurusdChange] = useState(0.15);
   const [eurusdSentiment, setEurusdSentiment] = useState(55);
@@ -134,6 +130,14 @@ export default function Dashboard() {
   const [ndxPrice, setNdxPrice] = useState(18245.80);
   const [ndxChange, setNdxChange] = useState(0.85);
   const [ndxSentiment, setNdxSentiment] = useState(78);
+
+  const [btcPrice, setBtcPrice] = useState(68500.00);
+  const [btcChange, setBtcChange] = useState(1.5);
+  const [btcSentiment, setBtcSentiment] = useState(85);
+
+  const [ethPrice, setEthPrice] = useState(3450.00);
+  const [ethChange, setEthChange] = useState(2.2);
+  const [ethSentiment, setEthSentiment] = useState(80);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isPausedRef = useRef(false);
@@ -366,20 +370,22 @@ export default function Dashboard() {
     const avgSlippage = newHistory.reduce((a, b) => a + b, 0) / newHistory.length;
     setAverageSlippagePips(avgSlippage);
 
-    // Dynamic virtual cap mapping
+    // Dynamic virtual cap mapping using non-overlapping semi-open intervals
     let newCap = 150000;
     let sleepMode = false;
-    if (avgSlippage >= 1.0) {
+    if (avgSlippage > 1.0) {
       sleepMode = true;
       newCap = 50000;
-    } else if (avgSlippage >= 0.6) {
+    } else if (avgSlippage > 0.5) {
       newCap = 50000;
-    } else if (avgSlippage >= 0.5) {
+    } else if (avgSlippage > 0.4) {
       newCap = 80000;
-    } else if (avgSlippage >= 0.4) {
+    } else if (avgSlippage > 0.3) {
       newCap = 100000;
-    } else if (avgSlippage >= 0.3) {
+    } else if (avgSlippage > 0.2) {
       newCap = 120000;
+    } else {
+      newCap = 150000;
     }
     setScalpVirtualBalanceCap(newCap);
     setScalperSleepMode(sleepMode);
@@ -441,7 +447,7 @@ export default function Dashboard() {
 
       // Secure DB sync on last slice
       if (isLastSlice) {
-        const priorityAssets = ["BTC", "SPUS", "GOLD", "TSLA", "EURUSD", "NDX"];
+        const priorityAssets = ["BTC", "ETH", "SPUS", "GOLD", "TSLA", "EURUSD", "NDX"];
         const activeTradingAsset = priorityAssets.find(asset => !newsHaltedAssetsRef.current.includes(asset)) || "GOLD";
 
         const getAssetPrice = (assetName: string) => {
@@ -451,7 +457,8 @@ export default function Dashboard() {
             case "SPUS": return spusPrice;
             case "EURUSD": return eurusdPrice;
             case "NDX": return ndxPrice;
-            case "BTC": return 68500.00;
+            case "BTC": return btcPrice;
+            case "ETH": return ethPrice;
             default: return 1.0;
           }
         };
@@ -461,7 +468,9 @@ export default function Dashboard() {
         const exitPrice = entryPrice * (1 + pctChange);
         const directionStr = netAmount >= 0 ? "BUY" : "SELL";
         const isScalpFill = sliceIndex !== undefined;
-        const slPercent = isScalpFill ? 0.0025 : 0.01;
+        const slPercent = isScalpFill 
+          ? 0.0025 
+          : (s_stealth ? (maxStealthStopLossRef.current + 2.0) / 100 : maxStealthStopLossRef.current / 100);
         const tpPercent = isScalpFill ? 0.00375 : 0.03;
         
         const stopLossVal = directionStr === "BUY" ? entryPrice * (1 - slPercent) : entryPrice * (1 + slPercent);
@@ -614,10 +623,27 @@ export default function Dashboard() {
       }
 
       setMarketSentiment(prev => {
-        const change = (Math.random() - 0.48) * 6; 
-        const newSentiment = Math.max(45, Math.min(98, prev + change));
+        // HFT Market Pulse Formula:
+        // Imbalance = BidVol / (BidVol + AskVol)
+        // ActivityFactor = 0.5 * (min(1.2, VolCurrent/VolAvg) + min(1.2, ATRCurrent/ATRAvg))
+        // Market Pulse % = min(100%, 2 * |Imbalance - 0.5| * ActivityFactor * 100)
         
+        const bidVol = 20000 + Math.random() * 80000;
+        const askVol = 20000 + Math.random() * 80000;
+        const skew = (Math.random() - 0.5) * 2; // -1 to 1
+        const imbalance = 0.5 + skew * 0.45; // between 0.05 and 0.95
+        
+        const volRatio = 0.4 + Math.random() * 1.2;
+        const atrRatio = 0.4 + Math.random() * 1.2;
+        const activityFactor = 0.5 * (Math.min(1.2, volRatio) + Math.min(1.2, atrRatio));
+        
+        let calculated = Math.min(100, 2 * Math.abs(imbalance - 0.5) * activityFactor * 100);
+        calculated = Math.max(45, Math.min(98, calculated));
+        
+        const newSentiment = Number((prev * 0.7 + calculated * 0.3).toFixed(0));
+
         // Randomly adjust threat level based on sentiment swings
+        const change = newSentiment - prev;
         if (Math.abs(change) > 4) {
           setThreatLevel("High");
           setTimeout(() => setThreatLevel("Medium"), 5000);
@@ -756,7 +782,13 @@ export default function Dashboard() {
       let isScalpActive = scalpActiveRef.current;
 
       // Scalping triggers only if Trend is not active, OR Trend has been secured via Break-Even
-      const canScalpEnter = scalpingActiveRef.current && !scalperSleepModeRef.current && !btcNewsHalted && isAutotradeRef.current && (!isTrendActive || trendBE);
+      // AND sentiment meets the required threshold (75% normal, 80% Greed Lock/Profit Shield)
+      const canScalpEnter = scalpingActiveRef.current && 
+                            !scalperSleepModeRef.current && 
+                            !btcNewsHalted && 
+                            isAutotradeRef.current && 
+                            (!isTrendActive || trendBE) && 
+                            sentimentRef.current >= requiredSentiment;
 
       // If a scalp position is active, always manage it until it closes naturally via SL/TP
       if (isScalpActive) {
@@ -820,12 +852,19 @@ export default function Dashboard() {
       setSpusChange(prev => Number((prev + (Math.random() - 0.5) * 0.02).toFixed(2)));
       setSpusSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 2))));
 
-      setOilPrice(prev => {
-        const delta = (Math.random() - 0.5) * 0.15;
-        return Number(Math.max(78, Math.min(88, prev + delta)).toFixed(2));
+      setBtcPrice(prev => {
+        const delta = (Math.random() - 0.5) * 45;
+        return Number(Math.max(60000, Math.min(80000, prev + delta)).toFixed(2));
       });
-      setOilChange(prev => Number((prev + (Math.random() - 0.5) * 0.06).toFixed(2)));
-      setOilSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 3))));
+      setBtcChange(prev => Number((prev + (Math.random() - 0.5) * 0.05).toFixed(2)));
+      setBtcSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 3))));
+
+      setEthPrice(prev => {
+        const delta = (Math.random() - 0.5) * 3;
+        return Number(Math.max(3000, Math.min(4500, prev + delta)).toFixed(2));
+      });
+      setEthChange(prev => Number((prev + (Math.random() - 0.5) * 0.05).toFixed(2)));
+      setEthSentiment(prev => Math.max(30, Math.min(99, prev + Math.floor((Math.random() - 0.5) * 3))));
 
       setEurusdPrice(prev => {
         const delta = (Math.random() - 0.5) * 0.0004;
@@ -844,8 +883,8 @@ export default function Dashboard() {
       // 2. News Shield Event simulation (randomly 3% chance every tick)
       if (Math.random() > 0.97) {
         const newsEvents = [
-          { title: "⚠️ FED MEETING: Interest rate announcement pending. News Shield activated for BTC & SPUS.", assets: ["BTC", "SPUS"], type: "USD/FED" },
-          { title: "⚠️ OPEC EXTRAORDINARY SESSION: Crude supply quota adjustments. News Shield activated for GOLD & Crude Oil.", assets: ["GOLD", "WTI Crude Oil"], type: "OPEC" },
+          { title: "⚠️ FED MEETING: Interest rate announcement pending. News Shield activated for BTC, ETH, SPUS & NDX.", assets: ["BTC", "ETH", "SPUS", "NDX"], type: "USD/FED" },
+          { title: "⚠️ OPEC EXTRAORDINARY SESSION: Global economic macro shift. News Shield activated for GOLD & EURUSD.", assets: ["GOLD", "EURUSD"], type: "OPEC" },
           { title: "⚠️ TSLA EARNINGS RELEASE: Q1 Net Profits statement. News Shield activated for TSLA.", assets: ["TSLA"], type: "EARNINGS" },
           { title: "⚠️ ECB INTEREST RATE DECISION: European Central Bank policy shift. News Shield activated for EURUSD.", assets: ["EURUSD"], type: "EUR/ECB" },
           { title: "⚠️ TECH SECTOR VOLATILITY: Large scale options activity. News Shield activated for NDX.", assets: ["NDX"], type: "NDX/TECH" }
@@ -1128,6 +1167,23 @@ export default function Dashboard() {
                 </span>
               </div>
             </div>
+
+            {/* Autopilot play/pause toggle */}
+            <button 
+              onClick={() => {
+                if (isPanic || autoHalted || (isEodHalted && !bypassEodHalt)) return;
+                setIsAutotrade(prev => !prev);
+              }}
+              disabled={isPanic || autoHalted || (isEodHalted && !bypassEodHalt)}
+              className={`flex items-center gap-3 px-6 py-2 rounded-full border-2 transition-all text-[11px] font-black uppercase tracking-[0.2em] ${
+                isAutotrade 
+                  ? "bg-emerald-600 border-emerald-400 text-white shadow-2xl shadow-emerald-600/40 font-black" 
+                  : "bg-emerald-600/10 border-emerald-600/30 text-emerald-400 hover:bg-emerald-600 hover:text-white font-black"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <Cpu size={14} className={isAutotrade ? "animate-pulse text-emerald-400" : ""} />
+              <span>{isAutotrade ? "Autopilot Active" : "Autopilot Paused"}</span>
+            </button>
 
             <button onClick={togglePanic} className={`flex items-center gap-3 px-6 py-2 rounded-full border-2 transition-all text-[11px] font-black uppercase tracking-[0.2em] ${isPanic || autoHalted ? "bg-red-600 border-red-400 text-white animate-pulse shadow-2xl shadow-red-600/40" : recoveryMode ? "bg-blue-600 border-blue-500 text-white animate-pulse shadow-2xl shadow-blue-600/30" : "bg-red-600/10 border-red-600/30 text-red-400 hover:bg-red-600 hover:text-white"}`}>
               {isPanic || autoHalted ? <ShieldAlert size={18} /> : <Zap size={18} />}
@@ -1549,7 +1605,7 @@ export default function Dashboard() {
                     <BarChart4 className="text-blue-400" size={20} />
                     <h2 className="text-lg font-black uppercase tracking-[0.3em] text-white/90 italic">Macro Intelligence</h2>
                  </div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6">
                     <BigIntelligenceCard 
                       label="Gold (XAU/USD)" 
                       value={goldPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
@@ -1575,14 +1631,6 @@ export default function Dashboard() {
                       isNewsHalted={newsHaltedAssets.includes("SPUS")} 
                     />
                     <BigIntelligenceCard 
-                      label="Crude Oil WTI" 
-                      value={oilPrice.toFixed(2)} 
-                      change={(oilChange >= 0 ? '+' : '') + oilChange.toFixed(2) + '%'} 
-                      sentiment={oilSentiment} 
-                      icon={<Flame size={32} className="text-orange-500" />} 
-                      isNewsHalted={newsHaltedAssets.includes("WTI Crude Oil")} 
-                    />
-                    <BigIntelligenceCard 
                       label="Euro / US Dollar" 
                       value={eurusdPrice.toFixed(4)} 
                       change={(eurusdChange >= 0 ? '+' : '') + eurusdChange.toFixed(2) + '%'} 
@@ -1597,6 +1645,22 @@ export default function Dashboard() {
                       sentiment={ndxSentiment} 
                       icon={<Cpu size={32} className="text-blue-500" />} 
                       isNewsHalted={newsHaltedAssets.includes("NDX")} 
+                    />
+                    <BigIntelligenceCard 
+                      label="Bitcoin (BTC)" 
+                      value={btcPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                      change={(btcChange >= 0 ? '+' : '') + btcChange.toFixed(2) + '%'} 
+                      sentiment={btcSentiment} 
+                      icon={<Coins size={32} className="text-amber-500" />} 
+                      isNewsHalted={newsHaltedAssets.includes("BTC")} 
+                    />
+                    <BigIntelligenceCard 
+                      label="Ethereum (ETH)" 
+                      value={ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                      change={(ethChange >= 0 ? '+' : '') + ethChange.toFixed(2) + '%'} 
+                      sentiment={ethSentiment} 
+                      icon={<Activity size={32} className="text-indigo-500" />} 
+                      isNewsHalted={newsHaltedAssets.includes("ETH")} 
                     />
                  </div>
               </section>

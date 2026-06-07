@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/app/lib/supabase";
+import { createClient } from "@/utils/supabase/server";
 
 export async function GET() {
   try {
+    const supabase = await createClient();
     // 1. Get the default user (self-healing pattern)
     const { data: users, error: userError } = await supabase
       .from("users")
@@ -17,7 +18,7 @@ export async function GET() {
       isOffline = true;
       user = {
         id: "00000000-0000-0000-0000-000000000000",
-        daily_loss_limit: -50.00,
+        daily_loss_limit: -1.00,
         starting_balance: 5000.00
       };
     } else if (users && users.length > 0) {
@@ -59,9 +60,19 @@ export async function GET() {
       dailyLossLimit = -(startingBalance * (Math.abs(rawLimit) / 100));
     }
 
-    // 2. Query today's trades (UTC day start)
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    // 2. Query today's trades (Europe/Brussels day start)
+    const tzString = new Date().toLocaleString("en-US", { timeZone: "Europe/Brussels" });
+    const localDate = new Date(tzString);
+    const y = localDate.getFullYear();
+    const m = String(localDate.getMonth() + 1).padStart(2, "0");
+    const d = String(localDate.getDate()).padStart(2, "0");
+    
+    // Determine the UTC offset of Europe/Brussels timezone dynamically
+    const tempDate = new Date(`${y}-${m}-${d}T00:00:00Z`);
+    const formattedTemp = new Date(tempDate.toLocaleString("en-US", { timeZone: "Europe/Brussels" }));
+    const offsetHours = formattedTemp.getUTCHours();
+    
+    const startOfDay = new Date(`${y}-${m}-${d}T00:00:00+0${offsetHours}:00`);
     const startOfDayISO = startOfDay.toISOString();
 
     const { data: trades, error: tradesError } = await supabase
