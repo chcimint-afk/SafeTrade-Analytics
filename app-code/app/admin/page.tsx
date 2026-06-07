@@ -62,6 +62,10 @@ export default function Dashboard() {
   const [isPanic, setIsPanic] = useState(false);
   const [isStealth, setIsStealth] = useState(true);
   const [autoHalted, setAutoHalted] = useState(false);
+  // Tracks whether the auto-halt was triggered by a DB Circuit Breaker breach (hard-lock)
+  // vs a temporary Panic Stop. Hard-lock can only be cleared at EOD reset (09:00 CET).
+  const [isCircuitBreakerHalted, setIsCircuitBreakerHalted] = useState(false);
+  const isCircuitBreakerHaltedRef = useRef(false);
   const [apiLoadState, setApiLoadState] = useState<"OK" | "QUEUED" | "COOLDOWN">("OK");
   const [apiQueueCount, setApiQueueCount] = useState(0);
   const [marketSentiment, setMarketSentiment] = useState(72); 
@@ -176,6 +180,7 @@ export default function Dashboard() {
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
   useEffect(() => { isPanicRef.current = isPanic; }, [isPanic]);
   useEffect(() => { autoHaltedRef.current = autoHalted; }, [autoHalted]);
+  useEffect(() => { isCircuitBreakerHaltedRef.current = isCircuitBreakerHalted; }, [isCircuitBreakerHalted]);
   useEffect(() => { isAutotradeRef.current = isAutotrade; }, [isAutotrade]);
   useEffect(() => { sentimentRef.current = marketSentiment; }, [marketSentiment]);
   useEffect(() => { dailyProfitRef.current = dailyProfit; }, [dailyProfit]);
@@ -213,25 +218,23 @@ export default function Dashboard() {
       .then(data => {
         if (data.success) {
           if (data.db_status === "offline") {
-            // DB is offline, check client-side simulated dailyProfit + local unsaved loss
-            const combinedDailyLoss = dailyProfitRef.current + unsavedLossRef.current;
+            // DB offline: use ONLY dailyProfit (no double-counting of unsavedLoss which is already included)
             const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
             const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
-            const isTriggered = combinedDailyLoss <= dynamicStopLoss;
-            if (isTriggered) {
+            const isTriggered = dailyProfitRef.current <= dynamicStopLoss;
+            if (isTriggered && !isCircuitBreakerHaltedRef.current) {
+              setIsCircuitBreakerHalted(true);
+              isCircuitBreakerHaltedRef.current = true;
               setAutoHalted(true);
               setIsPaused(true);
               setIsAutotrade(false);
               setProfit(0);
             }
           } else {
-            // DB is online, combine DB profit/loss with local unsaved loss for absolute safety
-            const combinedDailyLoss = Number(data.daily_profit_loss || 0) + unsavedLossRef.current;
-            const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - Number(data.daily_profit_loss || 0);
-            const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
-            const limit = Number(data.daily_loss_limit || dynamicStopLoss);
-            const isTriggered = combinedDailyLoss <= limit || data.circuit_breaker_active;
-            if (isTriggered) {
+            // DB online: trust the server's computed circuit_breaker_active flag
+            if (data.circuit_breaker_active && !isCircuitBreakerHaltedRef.current) {
+              setIsCircuitBreakerHalted(true);
+              isCircuitBreakerHaltedRef.current = true;
               setAutoHalted(true);
               setIsPaused(true);
               setIsAutotrade(false);
@@ -242,12 +245,13 @@ export default function Dashboard() {
       })
       .catch(err => {
         console.error("Error checking circuit breaker:", err);
-        // Fallback to client-side check on request failure
-        const combinedDailyLoss = dailyProfitRef.current + unsavedLossRef.current;
+        // Fallback: client-side check using only dailyProfit (no double-counting)
         const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
         const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
-        const isTriggered = combinedDailyLoss <= dynamicStopLoss;
-        if (isTriggered) {
+        const isTriggered = dailyProfitRef.current <= dynamicStopLoss;
+        if (isTriggered && !isCircuitBreakerHaltedRef.current) {
+          setIsCircuitBreakerHalted(true);
+          isCircuitBreakerHaltedRef.current = true;
           setAutoHalted(true);
           setIsPaused(true);
           setIsAutotrade(false);
@@ -612,7 +616,9 @@ export default function Dashboard() {
         setDailyProfit(0);
         dailyProfitRef.current = 0;
 
-        // Auto-resume from circuit breaker on a new trading session
+        // New trading day: release the Circuit Breaker hard-lock AND all halts
+        setIsCircuitBreakerHalted(false);
+        isCircuitBreakerHaltedRef.current = false;
         setAutoHalted(false);
         autoHaltedRef.current = false;
         setIsPaused(false);
@@ -654,7 +660,8 @@ export default function Dashboard() {
           setTimeout(() => setThreatLevel("Low"), 15000);
         }
 
-        if (autoHaltedRef.current && newSentiment > 85) { 
+        // Sentiment recovery only clears a manual/temp halt — NEVER a Circuit Breaker hard-lock
+        if (autoHaltedRef.current && !isCircuitBreakerHaltedRef.current && newSentiment > 85) { 
           setAutoHalted(false);
           setRecoveryMode(true);
           setIsPaused(false);
@@ -669,7 +676,13 @@ export default function Dashboard() {
       }
 
       // --- PARALLEL HYBRID TRADING SIMULATION ---
-      const btcNewsHalted = newsHaltedAssetsRef.current.includes("BTC");
+      // Check per-asset news halts for sector isolation (not a global BTC-only gate)
+      const anyTrendAssetHalted = ["GOLD", "TSLA", "EURUSD", "NDX"].every(
+        a => newsHaltedAssetsRef.current.includes(a)
+      );
+      const btcOrEthHalted = newsHaltedAssetsRef.current.includes("BTC") || newsHaltedAssetsRef.current.includes("ETH");
+      // Trend is blocked only if ALL core non-crypto assets are halted simultaneously
+      const allCoreAssetsHalted = anyTrendAssetHalted && btcOrEthHalted;
       const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
       const dailyStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
       const dailyTarget = currentStartingBalance * (DAILY_RISK_PERCENT / 100);
@@ -687,7 +700,7 @@ export default function Dashboard() {
       let isTrendActive = trendActiveRef.current;
       let trendBE = trendIsBreakEvenRef.current;
 
-      if (!btcNewsHalted && isAutotradeRef.current) {
+      if (!allCoreAssetsHalted && isAutotradeRef.current) {
         if (!isTrendActive) {
           // Entry criteria for Trend (only if remaining daily limit is >= 0.5%)
           if (!isTrendBlockedByLimit && sentimentRef.current >= requiredSentiment && !scalpActiveRef.current) {
@@ -787,9 +800,13 @@ export default function Dashboard() {
 
       // Scalping triggers only if Trend is not active, OR Trend has been secured via Break-Even
       // AND sentiment meets the required threshold (75% normal, 80% Greed Lock/Profit Shield)
+      // Scalp is blocked per-asset when an asset is news-halted (not a global halt)
+      const someScalpAssetAvailable = ["GOLD","TSLA","SPUS","EURUSD","NDX","BTC","ETH"].some(
+        a => !newsHaltedAssetsRef.current.includes(a)
+      );
       const canScalpEnter = scalpingActiveRef.current && 
                             !scalperSleepModeRef.current && 
-                            !btcNewsHalted && 
+                            someScalpAssetAvailable && 
                             isAutotradeRef.current && 
                             (!isTrendActive || trendBE) && 
                             sentimentRef.current >= requiredSentiment;
@@ -946,6 +963,8 @@ export default function Dashboard() {
   }, [realizeProfitAction]);
 
   const togglePanic = () => {
+    // If Circuit Breaker hard-lock is active, Resume is forbidden until next day (09:00 CET)
+    if (isCircuitBreakerHalted) return;
     if (isPanic || autoHalted || recoveryMode) {
       setIsPanic(false); setAutoHalted(false); setRecoveryMode(false); setIsPaused(false); setIsAutotrade(true);
       return;

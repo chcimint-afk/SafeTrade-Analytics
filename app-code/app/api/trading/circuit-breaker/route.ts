@@ -7,7 +7,7 @@ export async function GET() {
     // 1. Get the default user (self-healing pattern)
     const { data: users, error: userError } = await supabase
       .from("users")
-      .select("id, daily_loss_limit, starting_balance")
+      .select("id, daily_loss_limit, starting_balance, current_balance")
       .limit(1);
 
     let user;
@@ -19,7 +19,8 @@ export async function GET() {
       user = {
         id: "00000000-0000-0000-0000-000000000000",
         daily_loss_limit: -1.00,
-        starting_balance: 5000.00
+        starting_balance: 5000.00,
+        current_balance: 5000.00
       };
     } else if (users && users.length > 0) {
       user = users[0];
@@ -43,7 +44,8 @@ export async function GET() {
         user = {
           id: "00000000-0000-0000-0000-000000000000",
           daily_loss_limit: -1.00,
-          starting_balance: 5000.00
+          starting_balance: 5000.00,
+          current_balance: 5000.00
         };
       } else {
         user = newUser;
@@ -51,29 +53,26 @@ export async function GET() {
     }
 
     const userId = user.id;
-    const startingBalance = Number(user.starting_balance || 5000.00);
-    const rawLimit = Number(user.daily_loss_limit || -1.00);
 
-    // Dynamic Percentage Check: if absolute value is <= 5.0 (e.g. 1.0 or 2.0 or -1.0), it's a percentage
-    let dailyLossLimit = rawLimit;
-    if (Math.abs(rawLimit) > 0 && Math.abs(rawLimit) <= 5.0) {
-      dailyLossLimit = -(startingBalance * (Math.abs(rawLimit) / 100));
-    }
+    // 2. Query today's trades (Europe/Brussels day start — uses Intl.DateTimeFormat for host-OS-independent offset)
+    const now = new Date();
+    const brusselsParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Brussels",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).formatToParts(now);
+    const getPart = (type: string) => brusselsParts.find(p => p.type === type)?.value ?? "00";
+    const y = getPart("year");
+    const m = getPart("month");
+    const d = getPart("day");
 
-    // 2. Query today's trades (Europe/Brussels day start)
-    const tzString = new Date().toLocaleString("en-US", { timeZone: "Europe/Brussels" });
-    const localDate = new Date(tzString);
-    const y = localDate.getFullYear();
-    const m = String(localDate.getMonth() + 1).padStart(2, "0");
-    const d = String(localDate.getDate()).padStart(2, "0");
-    
-    // Determine the UTC offset of Europe/Brussels timezone dynamically
-    const tempDate = new Date(`${y}-${m}-${d}T00:00:00Z`);
-    const formattedTemp = new Date(tempDate.toLocaleString("en-US", { timeZone: "Europe/Brussels" }));
-    const offsetHours = formattedTemp.getUTCHours();
-    
-    const startOfDay = new Date(`${y}-${m}-${d}T00:00:00+0${offsetHours}:00`);
-    const startOfDayISO = startOfDay.toISOString();
+    // Build midnight Brussels time by subtracting the Intl-derived local time from "now" UTC
+    const brusselsLocalMs = Date.parse(`${y}-${m}-${d}T${getPart("hour")}:${getPart("minute")}:${getPart("second")}`);
+    const utcMs = now.getTime();
+    const offsetMs = brusselsLocalMs - utcMs; // real UTC offset in milliseconds
+    const midnightBrusselsMs = Date.parse(`${y}-${m}-${d}T00:00:00`) - offsetMs;
+    const startOfDayISO = new Date(midnightBrusselsMs).toISOString();
 
     const { data: trades, error: tradesError } = await supabase
       .from("trades")
@@ -93,6 +92,17 @@ export async function GET() {
       (sum, t) => sum + Number(t.profit_loss || 0),
       0
     );
+
+    // Calculate dynamic starting balance: current balance minus today's changes
+    const currentBalance = Number(user.current_balance || 5000.00);
+    const startingBalance = currentBalance - dailyProfitLoss;
+    const rawLimit = Number(user.daily_loss_limit || -1.00);
+
+    // Dynamic Percentage Check: if absolute value is <= 5.0 (e.g. 1.0 or 2.0 or -1.0), it's a percentage
+    let dailyLossLimit = rawLimit;
+    if (Math.abs(rawLimit) > 0 && Math.abs(rawLimit) <= 5.0) {
+      dailyLossLimit = -(startingBalance * (Math.abs(rawLimit) / 100));
+    }
 
     // 4. Circuit Breaker trigger logic: if losses exceed limit
     const isTriggered = dailyProfitLoss <= dailyLossLimit;

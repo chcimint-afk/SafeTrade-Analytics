@@ -1,7 +1,8 @@
 import { type NextRequest } from 'next/server';
 import { updateSession } from '@/utils/supabase/middleware';
 
-export async function middleware(request: NextRequest) {
+// Next.js 16+ (Turbopack): file must be named "proxy.ts" and export "proxy" function
+export async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 
