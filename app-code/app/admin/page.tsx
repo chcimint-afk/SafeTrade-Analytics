@@ -9,7 +9,6 @@ import {
   ShieldCheck, 
   Activity,
   Zap,
-  Flame,
   Waves,
   Lock,
   ShieldAlert,
@@ -523,7 +522,7 @@ export default function Dashboard() {
     } else {
       executeTradeExecution(netAmount, commission, slippage, true);
     }
-  }, [playCashSound, checkCircuitBreaker, queueRequest, goldPrice, tslaPrice, spusPrice, eurusdPrice, ndxPrice]);
+  }, [playCashSound, checkCircuitBreaker, queueRequest, goldPrice, tslaPrice, spusPrice, eurusdPrice, ndxPrice, btcPrice, ethPrice]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -628,10 +627,15 @@ export default function Dashboard() {
         // ActivityFactor = 0.5 * (min(1.2, VolCurrent/VolAvg) + min(1.2, ATRCurrent/ATRAvg))
         // Market Pulse % = min(100%, 2 * |Imbalance - 0.5| * ActivityFactor * 100)
         
-        const bidVol = 20000 + Math.random() * 80000;
-        const askVol = 20000 + Math.random() * 80000;
-        const skew = (Math.random() - 0.5) * 2; // -1 to 1
-        const imbalance = 0.5 + skew * 0.45; // between 0.05 and 0.95
+        // Generate simulated bid/ask volumes to calculate imbalance
+        const bidVol = 10000 + Math.random() * 90000;
+        const askVol = 10000 + Math.random() * 90000;
+        // Skew volumes dynamically to simulate buy/sell pressure fluctuations
+        const skewFactor = Math.random() > 0.5 ? 2.5 : 1.0;
+        const skewDirection = Math.random() > 0.5;
+        const adjustedBidVol = skewDirection ? bidVol * skewFactor : bidVol;
+        const adjustedAskVol = !skewDirection ? askVol * skewFactor : askVol;
+        const imbalance = adjustedBidVol / (adjustedBidVol + adjustedAskVol);
         
         const volRatio = 0.4 + Math.random() * 1.2;
         const atrRatio = 0.4 + Math.random() * 1.2;
