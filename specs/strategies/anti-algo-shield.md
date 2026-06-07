@@ -27,6 +27,7 @@ To maximize safety and execution precision:
   * Captures micro-impulses (0.45% - 0.75% net profit) triggered by institutional transaction flow.
   * Utilizes tight 0.25% Stealth Stop-Losses, keeping execution times under 3 minutes.
   * Reduces execution size by 50% under the *Profit Shield* protocol.
+  * Operates fully autonomously on the server-side without user intervention.
 
 ## 4. Institutional Threat Detection (Algo Activity Monitor)
 The system analyzes real-time price action to identify the "Fingerprint" of institutional algorithms:
