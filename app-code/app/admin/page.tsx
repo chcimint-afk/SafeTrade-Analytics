@@ -1193,8 +1193,8 @@ export default function Dashboard() {
               <span>{isAutotrade ? "Autopilot Active" : "Autopilot Paused"}</span>
             </button>
 
-            <button onClick={togglePanic} className={`flex items-center gap-3 px-6 py-2 rounded-full border-2 transition-all text-[11px] font-black uppercase tracking-[0.2em] ${isPanic || autoHalted ? "bg-red-600 border-red-400 text-white animate-pulse shadow-2xl shadow-red-600/40" : recoveryMode ? "bg-blue-600 border-blue-500 text-white animate-pulse shadow-2xl shadow-blue-600/30" : "bg-red-600/10 border-red-600/30 text-red-400 hover:bg-red-600 hover:text-white"}`}>
-              {isPanic || autoHalted ? <ShieldAlert size={18} /> : <Zap size={18} />}
+            <button onClick={togglePanic} className={`flex items-center gap-2 px-6 py-1.5 rounded-full border-2 transition-all text-[10px] font-black uppercase tracking-[0.2em] ${isPanic || autoHalted ? "bg-red-600 border-red-400 text-white animate-pulse shadow-2xl shadow-red-600/40" : recoveryMode ? "bg-blue-600 border-blue-500 text-white animate-pulse shadow-2xl shadow-blue-600/30" : "bg-red-600/10 border-red-600/30 text-red-400 hover:bg-red-600 hover:text-white"}`}>
+              {isPanic || autoHalted ? <ShieldAlert size={14} /> : <Zap size={14} />}
               <span>{isPanic || autoHalted ? 'Resume' : 'Panic Stop'}</span>
             </button>
             <div className="text-right">
@@ -1722,21 +1722,26 @@ function WhaleBox({ asset, amount, status, color, icon }: { asset: string, amoun
 function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalted }: { label: string, value: string, change: string, sentiment: number, icon: React.ReactNode, isNewsHalted?: boolean }) {
   const isPositive = change.startsWith('+');
   return (
-    <div className={`p-6 rounded-[2rem] bg-[#0d0d0f] border space-y-4 hover:border-emerald-500/20 transition-all shadow-xl group relative overflow-hidden ${isNewsHalted ? 'border-red-500/30 bg-red-950/5 shadow-[0_0_30px_rgba(239,68,68,0.02)]' : 'border-white/5'}`}>
+    <div className={`p-5 rounded-[2rem] bg-[#0d0d0f] border space-y-3 hover:border-emerald-500/20 transition-all shadow-xl group relative overflow-hidden ${isNewsHalted ? 'border-red-500/30 bg-red-950/5 shadow-[0_0_30px_rgba(239,68,68,0.02)]' : 'border-white/5'}`}>
       {isNewsHalted && (
         <div className="absolute top-0 right-0 bg-red-600 text-white text-[8px] font-black tracking-widest px-3 py-1 rounded-bl-xl uppercase animate-pulse z-10">
           News Halt
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">{label}</span>
-        <span className={`text-[8px] font-black px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>
+      {/* Row 1: icon (small) + label on left, change badge on right */}
+      <div className="flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="shrink-0 opacity-80">{/* icon placeholder scaled down via CSS */}
+            <div style={{ transform: 'scale(0.6)', transformOrigin: 'left center', display: 'inline-flex' }}>{icon}</div>
+          </div>
+          <span className="text-[9px] font-black uppercase tracking-[0.15em] text-gray-400 truncate">{label}</span>
+        </div>
+        <span className={`shrink-0 text-[8px] font-black px-2 py-0.5 rounded-full ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>
       </div>
-      <div className="flex items-end gap-3 min-w-0">
-         <div className="shrink-0">{icon}</div>
-         <p className="text-2xl font-black text-white tracking-tighter leading-none truncate min-w-0">{value}</p>
-      </div>
-      <div className="space-y-2 pt-2 border-t border-white/[0.02]">
+      {/* Row 2: price number — full width, no icon competition */}
+      <p className="text-3xl font-black text-white tracking-tighter leading-none w-full overflow-hidden" style={{ fontSize: 'clamp(1.1rem, 2vw, 1.875rem)' }}>{value}</p>
+      {/* Row 3: Market Pulse sentiment bar */}
+      <div className="space-y-1.5 pt-1 border-t border-white/[0.02]">
          <div className="flex justify-between text-[9px] font-black uppercase tracking-[0.2em] text-gray-600">
             <span className="italic group-hover:text-blue-400 transition-colors">Market Pulse</span>
             <span className={sentiment > 50 ? 'text-emerald-500' : 'text-red-500'}>{sentiment}%</span>
