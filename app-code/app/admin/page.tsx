@@ -460,33 +460,13 @@ export default function Dashboard() {
         const stopLossVal = directionStr === "BUY" ? entryPrice * (1 - slPercent) : entryPrice * (1 + slPercent);
         const takeProfitVal = directionStr === "BUY" ? entryPrice * (1 + tpPercent) : entryPrice * (1 - tpPercent);
 
-        fetch('/api/trading/record-trade', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            asset: activeTradingAsset,
-            direction: directionStr,
-            entry_price: entryPrice,
-            exit_price: exitPrice,
-            stop_loss: stopLossVal,
-            take_profit: takeProfitVal,
-            profit_loss: netAmount,
-            slippage: commission + slippage
-          })
-        })
-        .then(res => res.json())
-        .then(data => {
-          console.log("DB Trade logged:", data);
-          if (data.success && !data.db_saved) {
-            setUnsavedLoss(prev => prev + netAmount);
-          }
-          checkCircuitBreaker();
-        })
-        .catch(err => {
-          console.error("DB logging failed:", err);
-          setUnsavedLoss(prev => prev + netAmount);
+        // SIMULATION ONLY — do NOT write to DB.
+        // Real trades come from the broker API, not from this visual simulator.
+        // Writing simulated trades to Supabase was causing false Circuit Breaker triggers.
+        console.log("[Simulation] Trade executed (local only):", {
+          asset: activeTradingAsset,
+          direction: directionStr,
+          profit_loss: netAmount.toFixed(2),
         });
       }
     };
