@@ -1605,7 +1605,7 @@ export default function Dashboard() {
                   }`}
                 >
                   <Lock size={16} className={bypassEodHalt ? "" : "animate-pulse"} />
-                  <span>{bypassEodHalt ? "EOD Halt Bypassed — Trading Active" : "Bypass EOD Halt"}</span>
+                  <span>{bypassEodHalt ? "EOD Halt Bypassed ✓" : "Bypass EOD Halt"}</span>
                 </button>
               )}
 
