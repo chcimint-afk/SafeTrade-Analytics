@@ -1137,11 +1137,16 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Autopilot play/pause toggle — same compact size as Panic Stop */}
+            {/* Autopilot play/pause toggle */}
             <button 
               onClick={() => {
                 if (isPanic || autoHalted || (isEodHalted && !bypassEodHalt)) return;
-                setIsAutotrade(prev => !prev);
+                const nextActive = !isAutotrade;
+                setIsAutotrade(nextActive);
+                isAutotradeRef.current = nextActive;
+                // Also set isPaused so the interval doesn't snap it back during bypass mode
+                setIsPaused(!nextActive);
+                isPausedRef.current = !nextActive;
               }}
               disabled={isPanic || autoHalted || (isEodHalted && !bypassEodHalt)}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 transition-all text-[10px] font-black uppercase tracking-[0.2em] ${
@@ -1578,7 +1583,20 @@ export default function Dashboard() {
                   onClick={() => {
                     const newVal = !bypassEodHalt;
                     setBypassEodHalt(newVal);
-                    if (newVal) setIsAutotrade(true);
+                    bypassEodHaltRef.current = newVal;
+                    if (newVal) {
+                      // Bypass ON: resume autopilot and clear manual pause
+                      setIsAutotrade(true);
+                      isAutotradeRef.current = true;
+                      setIsPaused(false);
+                      isPausedRef.current = false;
+                    } else {
+                      // Bypass OFF: halt trading again (EOD halt is still active)
+                      setIsAutotrade(false);
+                      isAutotradeRef.current = false;
+                      setIsPaused(false);
+                      isPausedRef.current = false;
+                    }
                   }}
                   className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-[2rem] border-2 transition-all text-[11px] font-black uppercase tracking-[0.25em] ${
                     bypassEodHalt
