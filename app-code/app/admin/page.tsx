@@ -1728,19 +1728,16 @@ function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalt
           Halt
         </div>
       )}
-      {/* Row 1: icon + label | change badge */}
+      {/* Row 1: label | change badge — NO icon here so label has full width */}
       <div className="flex items-center justify-between gap-1 mb-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <div className="shrink-0 text-gray-500" style={{ fontSize: 0, lineHeight: 0 }}>
-            {/* render icon at 55% scale */}
-            <span style={{ display: 'inline-flex', transform: 'scale(0.55)', transformOrigin: 'left center', width: 20, height: 20 }}>{icon}</span>
-          </div>
-          <span className="text-[8px] font-black uppercase tracking-[0.12em] text-gray-500 leading-none flex-1 min-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-        </div>
+        <span className="text-[8px] font-black uppercase tracking-[0.12em] text-gray-400 leading-none">{label}</span>
         <span className={`shrink-0 text-[7px] font-black px-1.5 py-0.5 rounded-full leading-none ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>
       </div>
-      {/* Row 2: price — full card width, fixed text-xl, never clips */}
-      <p className="text-xl font-black text-white tracking-tighter leading-none mb-2">{value}</p>
+      {/* Row 2: small icon + price on same line */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="shrink-0 opacity-60" style={{ display: 'inline-flex', transform: 'scale(0.5)', transformOrigin: 'left center', width: 16, height: 16 }}>{icon}</span>
+        <p className="text-xl font-black text-white tracking-tighter leading-none">{value}</p>
+      </div>
       {/* Row 3: sentiment bar */}
       <div className="pt-2 border-t border-white/[0.02] space-y-1">
         <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-gray-600">
