@@ -1634,7 +1634,7 @@ export default function Dashboard() {
                  </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6">
                     <BigIntelligenceCard 
-                      label="Gold (XAU/USD)" 
+                      label="Gold" 
                       value={goldPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
                       change={(goldChange >= 0 ? '+' : '') + goldChange.toFixed(2) + '%'} 
                       sentiment={goldSentiment} 
@@ -1642,7 +1642,7 @@ export default function Dashboard() {
                       isNewsHalted={newsHaltedAssets.includes("GOLD")} 
                     />
                     <BigIntelligenceCard 
-                      label="Tesla (TSLA)" 
+                      label="Tesla" 
                       value={tslaPrice.toFixed(2)} 
                       change={(tslaChange >= 0 ? '+' : '') + tslaChange.toFixed(2) + '%'} 
                       sentiment={tslaSentiment} 
@@ -1650,7 +1650,7 @@ export default function Dashboard() {
                       isNewsHalted={newsHaltedAssets.includes("TSLA")} 
                     />
                     <BigIntelligenceCard 
-                      label="S&P 500 Shariah" 
+                      label="S&P 500" 
                       value={spusPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
                       change={(spusChange >= 0 ? '+' : '') + spusChange.toFixed(2) + '%'} 
                       sentiment={spusSentiment} 
@@ -1658,7 +1658,7 @@ export default function Dashboard() {
                       isNewsHalted={newsHaltedAssets.includes("SPUS")} 
                     />
                     <BigIntelligenceCard 
-                      label="Euro / US Dollar" 
+                      label="EUR/USD" 
                       value={eurusdPrice.toFixed(4)} 
                       change={(eurusdChange >= 0 ? '+' : '') + eurusdChange.toFixed(2) + '%'} 
                       sentiment={eurusdSentiment} 
@@ -1666,7 +1666,7 @@ export default function Dashboard() {
                       isNewsHalted={newsHaltedAssets.includes("EURUSD")} 
                     />
                     <BigIntelligenceCard 
-                      label="NASDAQ-100 Tech" 
+                      label="Nasdaq" 
                       value={ndxPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
                       change={(ndxChange >= 0 ? '+' : '') + ndxChange.toFixed(2) + '%'} 
                       sentiment={ndxSentiment} 
@@ -1674,16 +1674,16 @@ export default function Dashboard() {
                       isNewsHalted={newsHaltedAssets.includes("NDX")} 
                     />
                     <BigIntelligenceCard 
-                      label="Bitcoin (BTC)" 
-                      value={btcPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                      label="Bitcoin" 
+                      value={btcPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
                       change={(btcChange >= 0 ? '+' : '') + btcChange.toFixed(2) + '%'} 
                       sentiment={btcSentiment} 
                       icon={<Coins size={32} className="text-amber-500" />} 
                       isNewsHalted={newsHaltedAssets.includes("BTC")} 
                     />
                     <BigIntelligenceCard 
-                      label="Ethereum (ETH)" 
-                      value={ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 
+                      label="Ethereum" 
+                      value={ethPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} 
                       change={(ethChange >= 0 ? '+' : '') + ethChange.toFixed(2) + '%'} 
                       sentiment={ethSentiment} 
                       icon={<Activity size={32} className="text-indigo-500" />} 
@@ -1735,7 +1735,7 @@ function BigIntelligenceCard({ label, value, change, sentiment, icon, isNewsHalt
             {/* render icon at 55% scale */}
             <span style={{ display: 'inline-flex', transform: 'scale(0.55)', transformOrigin: 'left center', width: 20, height: 20 }}>{icon}</span>
           </div>
-          <span className="text-[8px] font-black uppercase tracking-[0.12em] text-gray-500 leading-none" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 72 }}>{label}</span>
+          <span className="text-[8px] font-black uppercase tracking-[0.12em] text-gray-500 leading-none flex-1 min-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
         </div>
         <span className={`shrink-0 text-[7px] font-black px-1.5 py-0.5 rounded-full leading-none ${isPositive ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{change}</span>
       </div>
