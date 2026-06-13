@@ -1572,6 +1572,25 @@ export default function Dashboard() {
                 </div>
               </section>
 
+              {/* Bypass EOD Halt — visible on main screen directly below Audit Log */}
+              {isEodHalted && (
+                <button
+                  onClick={() => {
+                    const newVal = !bypassEodHalt;
+                    setBypassEodHalt(newVal);
+                    if (newVal) setIsAutotrade(true);
+                  }}
+                  className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-[2rem] border-2 transition-all text-[11px] font-black uppercase tracking-[0.25em] ${
+                    bypassEodHalt
+                      ? "bg-amber-600 border-amber-400 text-white shadow-2xl shadow-amber-600/30"
+                      : "bg-amber-600/10 border-amber-600/40 text-amber-400 hover:bg-amber-600/20 animate-pulse"
+                  }`}
+                >
+                  <Lock size={16} className={bypassEodHalt ? "" : "animate-pulse"} />
+                  <span>{bypassEodHalt ? "EOD Halt Bypassed — Trading Active" : "Bypass EOD Halt"}</span>
+                </button>
+              )}
+
               {/* Whale Monitor */}
               <section className="space-y-6">
                 <div className="flex items-center gap-4">
