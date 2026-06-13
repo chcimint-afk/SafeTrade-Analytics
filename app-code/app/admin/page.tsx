@@ -218,18 +218,10 @@ export default function Dashboard() {
       .then(data => {
         if (data.success) {
           if (data.db_status === "offline") {
-            // DB offline: use ONLY dailyProfit (no double-counting of unsavedLoss which is already included)
-            const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
-            const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
-            const isTriggered = dailyProfitRef.current <= dynamicStopLoss;
-            if (isTriggered && !isCircuitBreakerHaltedRef.current) {
-              setIsCircuitBreakerHalted(true);
-              isCircuitBreakerHaltedRef.current = true;
-              setAutoHalted(true);
-              setIsPaused(true);
-              setIsAutotrade(false);
-              setProfit(0);
-            }
+            // DB offline: do NOT halt based on simulated data.
+            // Circuit breaker only fires on real DB-confirmed losses.
+            // Just log and continue — simulated P&L is not real money.
+            console.warn("[Circuit Breaker] DB offline — skipping halt check. Waiting for DB reconnect.");
           } else {
             // DB online: trust the server's computed circuit_breaker_active flag
             if (data.circuit_breaker_active && !isCircuitBreakerHaltedRef.current) {
@@ -244,19 +236,8 @@ export default function Dashboard() {
         }
       })
       .catch(err => {
-        console.error("Error checking circuit breaker:", err);
-        // Fallback: client-side check using only dailyProfit (no double-counting)
-        const currentStartingBalance = INITIAL_BALANCE + realizedProfitRef.current - dailyProfitRef.current;
-        const dynamicStopLoss = -(currentStartingBalance * (DAILY_RISK_PERCENT / 100));
-        const isTriggered = dailyProfitRef.current <= dynamicStopLoss;
-        if (isTriggered && !isCircuitBreakerHaltedRef.current) {
-          setIsCircuitBreakerHalted(true);
-          isCircuitBreakerHaltedRef.current = true;
-          setAutoHalted(true);
-          setIsPaused(true);
-          setIsAutotrade(false);
-          setProfit(0);
-        }
+        // Network error — API unreachable. Do not halt. Just log.
+        console.error("[Circuit Breaker] API unreachable:", err.message);
       });
   }, []);
 
